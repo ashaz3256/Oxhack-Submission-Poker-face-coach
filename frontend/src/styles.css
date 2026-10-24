@@ -36,7 +36,7 @@ button.link { border: none; color: var(--muted); text-decoration: underline; }
 /* Call layout */
 .call { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 16px; min-height: 100vh; }
 @media (max-width: 900px) { .call { grid-template-columns: 1fr; } }
-.stage { display: grid; grid-template-rows: 1fr auto auto; gap: 12px; min-width: 0; }
+.stage { display: grid; grid-template-rows: 1fr auto auto auto; gap: 12px; min-width: 0; align-content: start; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-content: start; }
 @media (max-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 .tile {
@@ -443,3 +443,15 @@ button.join { box-shadow: 0 0 0 0 rgba(229,84,75,.6); animation: throb 2.2s infi
 .join-toast { background: var(--panel); border: 1px solid var(--line); padding: 6px 12px; border-radius: 10px; font-size: 14px; animation: toastIn .35s ease both; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
 .voice-warn { margin: 0; font-size: 12px; color: #f0b0aa; background: #2a1d1c; border-radius: 8px; padding: 6px 8px; line-height: 1.4; }
+
+/* ---- Turn controls ---- */
+.captions { position: relative; display: flex; align-items: center; gap: 14px; overflow: hidden; }
+.caption-text { flex: 1; }
+.captions.skippable { cursor: pointer; }
+.done-btn { background: var(--win); color: #06170e; border-color: var(--win); font-weight: 800; font-size: 16px; padding: 10px 20px; border-radius: 10px; white-space: nowrap; }
+.done-btn:hover { filter: brightness(1.1); }
+.countdown { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--win); transition: width .1s linear; }
+.hints { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; color: var(--muted); font-size: 12px; }
+.hints button.link { padding: 0; font-size: 12px; text-decoration: none; color: var(--muted); }
+.hints button.link:hover { color: var(--accent); }
+kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; margin-right: 4px; color: var(--text); background: var(--panel); }

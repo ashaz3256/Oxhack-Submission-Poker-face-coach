@@ -13,7 +13,7 @@ import { listen, markBroken, sttState, waitForSpeech } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
 import Face from './Face.jsx'
 import { cueFor, playDeath, playIntro, playJoin, playNight, playRing, playVerdict, preloadSfx, stopLoop, suspicionHeartbeat } from './sfx.js'
-import { cleanText, pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
+import { cleanText, pauseSpeech, prefetch, resumeSpeech, say, skipSpeech, voiceStatus } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
 const LISTEN = {
@@ -71,6 +71,9 @@ export default function Call({ dev }) {
   const typingRef = useRef(dev)
   const silentFails = useRef(0)
   const recorder = useRef(null)
+  const turn = useRef(null)        // the listening turn in progress, so "Done" can end it
+  const lastLine = useRef(null)    // for "Replay last line"
+  const [countdown, setCountdown] = useState(0)
   const [typing, setTyping] = useState(dev)
   const lastRead = useRef(null)
   const townRef = useRef(null)
@@ -117,11 +120,34 @@ export default function Call({ dev }) {
     if (presage.current) presage.current.paused = false
     waiters.current.splice(0).forEach((r) => r())
   }
-  const choose = (text) => choice.current?.(text)
+  const wantsAgain = useRef(false)  // "Play again" pressed while the review was still talking
+  const choose = (text) => {
+    if (choice.current) return choice.current(text)
+    if (text === 'play again') {
+      wantsAgain.current = true
+      skipSpeech()
+    }
+  }
+  const done = () => turn.current?.stop?.()
+  const skip = () => skipSpeech()
+  const replay = async () => {
+    const line = lastLine.current
+    if (!line) return
+    setSpeaking({ speaker: line.speaker, text: cleanText(line.text), level: 0 })
+    await say(line.speaker, line.text, (level) => setSpeaking((sp) => ({ ...sp, level })))
+    setSpeaking({ speaker: null, text: '', level: 0 })
+  }
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') (pausedRef.current ? resume : pause)()
+      if (e.key === 'Escape') return (pausedRef.current ? resume : pause)()
+      if (e.target instanceof HTMLInputElement || pausedRef.current) return
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault()
+        document.activeElement?.blur?.()  // so Space can't also press a focused button
+        done()
+      } else if (e.key === 'ArrowRight') skip()
+      else if (e.key === 'r' || e.key === 'R') replay()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -167,16 +193,24 @@ export default function Call({ dev }) {
         const turnStart = performance.now()
         recorder.current?.start()
         const backup = !dev && sttState.broken
+        // After the warm-up, a turn ends after your own natural pause rather than a fixed one.
+        const personal = kind === 'answer' ? voice.current?.personalSilenceMs() : null
+        const opts = { ...LISTEN[kind], ...(personal ? { silenceMs: personal } : {}), voice: voice.current, control, onCountdown: setCountdown }
+        turn.current = control
         let heard
         if (dev || typingRef.current) heard = new Promise((resolve) => (typed.current = resolve))
-        else if (backup) heard = waitForSpeech({ ...LISTEN[kind], voice: voice.current, control })
-        else heard = listen({ ...LISTEN[kind], voice: voice.current, control, onInterim: (t) => setListening({ kind, interim: t }) })
+        else if (backup) heard = waitForSpeech(opts)
+        else heard = listen({ ...opts, onInterim: (t) => setListening({ kind, interim: t }) })
         const clicked = new Promise((resolve) => (choice.current = resolve))
+        if (kind === 'again' && wantsAgain.current) choice.current('play again')
+        wantsAgain.current = false
         const stopped = new Promise((resolve) => (interrupt.current = resolve))
         const [source, said] = await Promise.race([
           heard.then((t) => ['speech', t]), clicked.then((t) => ['click', t]), stopped.then((t) => ['pause', t])])
         choice.current = null
         interrupt.current = null
+        turn.current = null
+        setCountdown(0)
         control.stop?.('')
         const audio = recorder.current?.stop()
         stopLoop('heartbeat')
@@ -246,6 +280,7 @@ export default function Call({ dev }) {
         }
         cueFor(line.speaker, line.text)
         setSpeaking({ speaker: line.speaker, text: cleanText(line.text), level: 0 })
+        lastLine.current = line
         const drew = line.text.match(/^You drew card (\d)/)
         if (drew && state.game) {
           setDeal({ picked: Number(drew[1]), youMafia: state.game.you_mafia, cards: cardOwners(state.game.players) })
@@ -340,11 +375,11 @@ export default function Call({ dev }) {
           setReportKey((k) => k + 1)
           setShowReport(true)
           const r = await api.review(sid.current).catch(() => null)
-          if (r?.text) {
-            setReview(r.text)
-            await speakLines([{ speaker: 'Narrator', text: r.text }], state)
+          if (r?.text) setReview(r.text)
+          if (r?.text && !wantsAgain.current) await speakLines([{ speaker: 'Narrator', text: r.text }], state)
+          if (!wantsAgain.current) {
+            await speakLines([{ speaker: 'Narrator', text: "Have a look at your breakdown. Say 'play again' when you're ready." }], state)
           }
-          await speakLines([{ speaker: 'Narrator', text: "Have a look at your breakdown. Say 'play again' when you're ready." }], state)
         }
         const { transcript, raw, faceFrames } = await hear(awaiting.kind)
         state = await api.speak(sid.current, transcript, raw, faceFrames)
@@ -400,12 +435,25 @@ export default function Call({ dev }) {
           })}
         </div>
 
-        <div className={`captions ${speaking.speaker === 'Narrator' ? 'narrator' : ''}`}>
-          {status && <span>{status}</span>}
-          {!status && speaking.speaker && <><b>{speaking.speaker}</b> {speaking.text}</>}
-          {!status && !speaking.speaker && listening && (
-            <><b className="me">🎙 Your turn</b> {listening.interim || <i>{game?.awaiting?.prompt ?? 'Speak now…'}{(listening.kind === 'vote' || listening.kind === 'kill') ? ', or tap their tile' : ''}</i>}</>
+        <div className={`captions ${speaking.speaker === 'Narrator' ? 'narrator' : ''} ${speaking.speaker ? 'skippable' : ''}`}
+          onClick={speaking.speaker ? skip : undefined} title={speaking.speaker ? 'Click or press → to skip' : undefined}>
+          <div className="caption-text">
+            {status && <span>{status}</span>}
+            {!status && speaking.speaker && <><b>{speaking.speaker}</b> {speaking.text}</>}
+            {!status && !speaking.speaker && listening && (
+              <><b className="me">🎙 Your turn</b> {listening.interim || <i>{game?.awaiting?.prompt ?? 'Speak now…'}{(listening.kind === 'vote' || listening.kind === 'kill') ? ', or tap their tile' : ''}</i>}</>
+            )}
+          </div>
+          {!speaking.speaker && listening && !typing && (
+            <button className="done-btn" onClick={(e) => { e.stopPropagation(); done() }}>Done ✓</button>
           )}
+          {!speaking.speaker && listening && countdown > 0 && <div className="countdown" style={{ width: `${countdown * 100}%` }} />}
+        </div>
+        <div className="hints">
+          <span><kbd>Space</kbd> done</span>
+          <span><kbd>Esc</kbd> pause</span>
+          <span><kbd>→</kbd> skip line</span>
+          <button className="link" onClick={replay}><kbd>R</kbd> replay last line</button>
         </div>
         {typing && listening && (
           <form className="devbox" onSubmit={submitDev}>

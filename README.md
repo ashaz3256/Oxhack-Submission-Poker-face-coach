@@ -60,6 +60,8 @@ npm run dev                     # open http://localhost:5173 in Chrome or Edge
 4. Answer the AIs' questions. At vote time, say a name or tap their tile.
 5. When the game ends, read your breakdown: every answer and vote marked as right or wrong, your biggest tells and how to fix them. Say "play again" or tap the button.
 
+**Shortcuts:** Space (or the Done button) sends your answer straight away, → or clicking the captions skips the line being spoken, R replays the last line. After the warm-up a turn ends after your own natural pause length.
+
 **Pause** any time with the button in the sidebar or the Esc key. The current turn is thrown away and asked again when you resume.
 
 **Needs:**

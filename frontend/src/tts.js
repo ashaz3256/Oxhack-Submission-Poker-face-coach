@@ -100,6 +100,8 @@ function browserVoice(speaker) {
 // The pause button freezes whoever is talking mid-sentence.
 let current = null
 let paused = false
+let endCurrent = null   // finishes whatever line is playing, for the skip button
+let skipRequested = false
 export function pauseSpeech() {
   paused = true
   current?.pause()
@@ -157,7 +159,11 @@ async function playMp3(blob, onLevel) {
   await new Promise((r) => {
     audio.onended = r
     audio.onerror = r
+    endCurrent = r
+    if (skipRequested) r()
   })
+  endCurrent = null
+  audio.pause()
   cancelAnimationFrame(raf)
   clearTimeout(raf)
   current = null
@@ -187,9 +193,14 @@ function browserSpeak(speaker, text, onLevel) {
       if (budget <= 0) done()
     }, 250)
     let finished = false
+    endCurrent = () => {
+      window.speechSynthesis.cancel()
+      done()
+    }
     function done() {
       if (finished) return
       finished = true
+      endCurrent = null
       clearInterval(pulse)
       clearInterval(guard)
       onLevel?.(0)
@@ -207,11 +218,14 @@ export const cleanText = (text) => (text || '').replace(/\[[a-zA-Z ]{2,24}\]\s*/
 
 export async function say(speaker, text, onLevel) {
   if (FAST) return new Promise((r) => setTimeout(r, 60))
+  skipRequested = false
   if (await backendHasVoices()) {
     const blob = await fetchAudio(speaker, text)
     cache.delete(`${speaker}|${text}`)
+    if (skipRequested) return
     if (blob && (await playMp3(blob, onLevel))) return
   }
+  if (skipRequested) return
   return browserSpeak(speaker, text, onLevel)
 }
 
@@ -222,4 +236,10 @@ export function usingHumanVoices() {
 // For the sidebar: which voices are playing, and why ElevenLabs isn't if it isn't.
 export function voiceStatus() {
   return { checked: status !== null, human: usingHumanVoices(), keySet: Boolean(status?.elevenlabs), error: voiceError }
+}
+
+// Cut the current line short and move on to the next one.
+export function skipSpeech() {
+  skipRequested = true   // also covers a line that is still loading or just starting
+  endCurrent?.()
 }

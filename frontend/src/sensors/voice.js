@@ -42,6 +42,7 @@ export class VoiceAnalyser {
     this.turn = null
     this.lastVoiceAt = 0
     this.calib = []
+    this.pauses = []
     this.timer = setInterval(() => this.tick(), 40)
   }
 
@@ -85,6 +86,14 @@ export class VoiceAnalyser {
     while (last > first && !t.frames[last].voiced) last--
     const span = t.frames.slice(first, last + 1)
     const voicedSeconds = (voicedFrames.length * 40) / 1000
+    // Longest pause inside the answer: after the warm-up this sets how long a silence ends your turn.
+    let gap = 0
+    let longest = 0
+    for (const f of span) {
+      gap = f.voiced ? 0 : gap + 40
+      longest = Math.max(longest, gap)
+    }
+    this.pauses.push(longest)
     const words = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
     const p = [...t.pitches].sort((a, b) => a - b)
     const median = p.length ? p[Math.floor(p.length / 2)] : null
@@ -98,6 +107,14 @@ export class VoiceAnalyser {
       pause: span.length ? 1 - span.filter((f) => f.voiced).length / span.length : null,
       latency: (t.firstVoiced - t.start) / 1000,
     }
+  }
+
+  // Your natural mid-answer pause plus a margin, between 0.9 and 1.6 seconds; null until we know you.
+  personalSilenceMs() {
+    if (this.pauses.length < 3) return null
+    const sorted = [...this.pauses].sort((a, b) => a - b)
+    const typical = sorted[Math.floor(sorted.length * 0.75)]
+    return Math.max(900, Math.min(1600, typical + 350))
   }
 
   silentFor() {

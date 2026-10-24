@@ -15,7 +15,7 @@ export function markBroken(reason) {
 }
 
 // Backup turn-taking without recognition: wait until you've spoken and then gone quiet.
-export function waitForSpeech({ maxMs = 20000, silenceMs = 1500, voice, control }) {
+export function waitForSpeech({ maxMs = 20000, silenceMs = 1500, voice, control, onCountdown }) {
   return new Promise((resolve) => {
     const started = performance.now()
     let voicedMs = 0
@@ -30,6 +30,7 @@ export function waitForSpeech({ maxMs = 20000, silenceMs = 1500, voice, control 
     const timer = setInterval(() => {
       if (voice && voice.silentFor() < 120) voicedMs += 100
       const spoke = voicedMs >= 300
+      onCountdown?.(spoke ? Math.min(1, voice.silentFor() / silenceMs) : 0)
       if (spoke && voice.silentFor() > silenceMs) finish()
       if (performance.now() - started > maxMs) finish()
     }, 100)
@@ -39,7 +40,8 @@ export function waitForSpeech({ maxMs = 20000, silenceMs = 1500, voice, control 
 // listen({ maxMs, silenceMs, voice, onInterim, control }) -> Promise<string>
 // Ends when you have said something and then gone quiet for `silenceMs`, or at `maxMs`.
 // `control.stop(text)` ends it early (a click, or the pause button) and resolves with `text`.
-export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, control }) {
+// `onCountdown(f)` reports how far through the closing silence you are, 0 to 1.
+export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, control, onCountdown }) {
   return new Promise((resolve) => {
     let finalText = ''
     let interim = ''
@@ -95,6 +97,7 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, cont
       const now = performance.now()
       const said = (finalText + interim).trim().length > 0
       const quietMic = voice ? voice.silentFor() > silenceMs * 0.8 : true
+      onCountdown?.(said ? Math.min(1, (now - lastResult) / silenceMs) : 0)
       if (said && now - lastResult > silenceMs && quietMic) finish()
       if (now - started > maxMs) finish()
     }, 150)
