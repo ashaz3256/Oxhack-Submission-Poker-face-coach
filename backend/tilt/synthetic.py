@@ -50,3 +50,35 @@ def play(n_hands: int = 60, leakiness: float = 1.0, opponent: str = "shark", see
             clock.advance(1)
             session.sim_tick()
     return session
+
+
+def play_mafia(n_games: int = 12, leakiness: float = 1.0, inspector: str = "reader", seed: int = 7):
+    """Play `n_games` of Mafia with a scripted player and simulated vitals."""
+    from .mafia import YOU, MafiaSession
+
+    clock = FakeClock()
+    rng = random.Random(seed)
+    session = MafiaSession(inspector=inspector, vitals_source="sim", leakiness=leakiness, seed=seed, clock=clock)
+
+    def wait(lo: int, hi: int) -> None:
+        for _ in range(rng.randint(lo, hi)):
+            clock.advance(1)
+            session.sim_tick()
+
+    wait(45, 45)  # resting baseline
+    for _ in range(n_games):
+        game = session.new_game()
+        while game.phase != "over":
+            if game.phase == "question":
+                wait(3, 8)
+                options = game.question.options
+                pick = options[0] if game.question.id == "are_you" and rng.random() < 0.85 else rng.choice(options)
+                session.answer(pick.id)
+            elif game.phase == "vote":
+                wait(2, 4)
+                session.vote(rng.choice(game.living(exclude=YOU)))
+            elif game.phase == "night":
+                wait(1, 2)
+                session.kill(rng.choice(game.living(exclude=YOU)))
+        wait(3, 3)
+    return session

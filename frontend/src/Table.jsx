@@ -17,7 +17,7 @@ export function Card({ card, hidden }) {
   )
 }
 
-function Sparkline({ values, width = 260, height = 60 }) {
+export function Sparkline({ values, width = 260, height = 60 }) {
   if (values.length < 2) return <svg width={width} height={height} />
   const lo = Math.min(...values) - 2
   const hi = Math.max(...values) + 2

@@ -49,15 +49,18 @@ def _post_json(url: str, body: dict, headers: dict) -> bytes:
 def session_review(session: Session) -> dict:
     report = leak_report(session)
     report["tells"].pop("curve", None)
-    summary = headline(report)
+    return review_from_report(report, headline(report), game="poker")
+
+
+def review_from_report(report: dict, summary: str, game: str) -> dict:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         return {"source": "template", "text": summary}
     prompt = (
-        "You are a blunt poker coach reviewing a session where a bot read the player's heart rate and breathing "
-        "to spot bluffs. Using only the JSON below, write 4 short sentences: how much the player's body leaked, "
-        "which signal gave them away, when they made bad calls or folds, and one concrete drill for next session. "
-        "No markdown.\n\n" + json.dumps(report)
+        f"You are a blunt coach reviewing a {game} session where an AI read the player's heart rate and breathing "
+        "to tell when they were bluffing or lying. Using only the JSON below, write 4 short sentences: how much the "
+        "player's body gave away, which signal gave them away, what it cost them, and one concrete drill for next "
+        "session. No markdown.\n\n" + json.dumps(report)
     )
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     try:

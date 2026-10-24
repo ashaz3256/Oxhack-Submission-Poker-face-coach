@@ -47,3 +47,17 @@ export async function speak(text) {
     speaking = false
   }
 }
+
+export const mafia = {
+  create: (opts) => call('POST', '/mafia/sessions', opts),
+  newGame: (sid) => call('POST', `/mafia/sessions/${sid}/games`),
+  answer: (sid, option) => call('POST', `/mafia/sessions/${sid}/answer`, { option }),
+  vote: (sid, target) => call('POST', `/mafia/sessions/${sid}/vote`, { target }),
+  kill: (sid, target) => call('POST', `/mafia/sessions/${sid}/kill`, { target }),
+  simTick: (sid) => call('POST', `/mafia/sessions/${sid}/sim-tick`),
+  sendVitals: (sid, samples) => call('POST', `/mafia/sessions/${sid}/vitals`, { samples }),
+  live: (sid) => call('GET', `/mafia/sessions/${sid}/live`),
+  report: (sid) => call('GET', `/mafia/sessions/${sid}/report`),
+  review: (sid) => call('POST', `/mafia/sessions/${sid}/review`),
+  demo: (games = 15) => call('POST', `/mafia/demo?games=${games}`),
+}

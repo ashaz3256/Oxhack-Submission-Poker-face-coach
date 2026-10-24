@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from . import cards
 from .features import TELL_FEATURES, TILT_FEATURES, Sample, vector, vitals_features
 from .models import OnlineLogit
-from .sim import SimPhysiology
+from .sim import SimPhysiology, poker_stress
 
 STREETS = ["preflop", "flop", "turn", "river"]
 BOARD_SIZE = [0, 3, 4, 5]
@@ -139,7 +139,7 @@ class Session:
         hand = self.current_hand
         live = hand is not None and hand.phase != "done"
         strength = cards.equity_vs_random(hand.hero, hand.board) if live else None
-        sample = self.sim.tick(self.clock(), strength, hand.pot if live else 0.0)
+        sample = self.sim.tick(self.clock(), poker_stress(strength, hand.pot if live else 0.0))
         self.add_samples([sample])
         return sample
 

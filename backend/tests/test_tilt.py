@@ -63,3 +63,31 @@ def test_api_round_trip():
     assert report["hands"] == 1 and "headline" in report
     assert client.post(f"/api/sessions/{sid}/review").json()["text"]
     assert client.post("/api/speak", json={"text": "hi"}).status_code in (200, 204)
+
+
+def test_mafia_liar_is_caught_more_by_the_reader():
+    from tilt.mafia_report import mafia_report
+    from tilt.synthetic import play_mafia
+
+    r = mafia_report(play_mafia(n_games=20, leakiness=1.5, seed=2))
+    assert r["lie_auc"] > 0.7
+    assert r["caught_by_reader"] > r["caught_by_blind"]
+
+
+def test_mafia_api_round_trip():
+    client = TestClient(app)
+    sid = client.post("/api/mafia/sessions", json={"inspector": "reader"}).json()["session_id"]
+    for _ in range(3):
+        assert client.post(f"/api/mafia/sessions/{sid}/sim-tick").status_code == 200
+    state = client.post(f"/api/mafia/sessions/{sid}/games").json()
+    while state["game"]["phase"] != "over":
+        g = state["game"]
+        if g["phase"] == "question":
+            state = client.post(f"/api/mafia/sessions/{sid}/answer", json={"option": g["question"]["options"][0]["id"]}).json()
+        elif g["phase"] == "vote":
+            state = client.post(f"/api/mafia/sessions/{sid}/vote", json={"target": g["vote_options"][0]}).json()
+        else:
+            state = client.post(f"/api/mafia/sessions/{sid}/kill", json={"target": g["vote_options"][0]}).json()
+    report = client.get(f"/api/mafia/sessions/{sid}/report").json()
+    assert report["games"] == 1 and report["headline"]
+    assert client.post(f"/api/mafia/sessions/{sid}/review").json()["text"]

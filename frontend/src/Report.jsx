@@ -33,7 +33,7 @@ function CostCurve({ curve }) {
   )
 }
 
-function Coefficients({ coef }) {
+export function Coefficients({ coef }) {
   const entries = Object.entries(coef || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
   if (!entries.length) return <p className="hint">The model needs a few bluffs and a few value bets first.</p>
   const max = Math.max(...entries.map(([, v]) => Math.abs(v)))

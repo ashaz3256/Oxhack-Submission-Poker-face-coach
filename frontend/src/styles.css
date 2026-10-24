@@ -97,3 +97,33 @@ input, select { background: var(--bg); color: var(--text); border: 1px solid var
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 500; }
+
+.mafia-board { display: grid; gap: 16px; background: radial-gradient(ellipse at top, #2a1d24 0%, var(--panel) 70%); }
+.mafia-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.role-badge { font-weight: 700; font-size: 18px; color: var(--cool); margin-top: 4px; }
+.role-badge.mafia { color: var(--hot); }
+.players { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+@media (max-width: 700px) { .players { grid-template-columns: repeat(3, 1fr); } }
+.player { display: grid; justify-items: center; gap: 2px; padding: 10px 4px; border-radius: 10px; background: var(--bg); }
+.player:disabled { opacity: 1; cursor: default; }
+.player.pickable { border-color: var(--accent); cursor: pointer; }
+.player.pickable:hover { background: #2a2414; }
+.player.dead { opacity: 0.4; }
+.player.mafia .prole { color: var(--hot); }
+.avatar { font-size: 30px; }
+.pname { font-weight: 600; }
+.prole { font-size: 12px; color: var(--muted); }
+.chat { max-height: 300px; overflow-y: auto; background: var(--bg); border-radius: 10px; padding: 12px; display: grid; gap: 6px; font-size: 14px; }
+.line b { color: var(--muted); margin-right: 6px; }
+.line.me b { color: var(--accent); }
+.line.inspector b { color: var(--cool); }
+.line.narrator { color: var(--muted); font-style: italic; }
+.prompt { display: grid; gap: 10px; min-height: 60px; }
+.q { font-size: 18px; font-weight: 600; }
+.answers { display: flex; gap: 10px; flex-wrap: wrap; }
+.chart .dot-lie { fill: var(--hot); }
+.chart .dot-truth { fill: var(--cool); }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 10px; }
+.key.lie { background: var(--hot); }
+.key.truth { background: var(--cool); }
+.games { display: flex; gap: 8px; }

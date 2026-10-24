@@ -71,6 +71,24 @@ decisions = Table(
 )
 
 
+answers = Table(
+    "mafia_answers", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("session_id", String, index=True),
+    Column("game", Integer),
+    Column("day", Integer),
+    Column("question", String),
+    Column("option", String),
+    Column("text", String),
+    Column("t", Float),
+    Column("is_lie", Boolean),
+    Column("role", String),
+    Column("features", JSON),
+    Column("p_lie_reader", Float),
+    Column("p_lie_blind", Float),
+)
+
+
 class Store:
     """Writes each session's new rows as they appear. Live game state stays in memory."""
 
@@ -108,3 +126,19 @@ class Store:
                     started_at=h.started_at, result_bb=h.result_bb, showdown=h.showdown))
             done["hands"] = len(finished)
             conn.execute(update(sessions).where(sessions.c.id == s.id).values(net_bb=s.net_bb))
+
+    def save_mafia(self, s) -> None:
+        done = self._written.setdefault(s.id, {"created": 0, "vitals": 0, "answers": 0})
+        with self.engine.begin() as conn:
+            if not done["created"]:
+                conn.execute(insert(sessions).values(id=s.id, player=s.player, opponent=f"mafia-{s.inspector}",
+                                                     vitals_source=s.vitals_source, created_at=s.clock(), net_bb=0.0))
+                done["created"] = 1
+            new_vitals = s.samples[done["vitals"]:]
+            if new_vitals:
+                conn.execute(insert(vitals), [{"session_id": s.id, "t": v.t, "hr": v.hr, "br": v.br} for v in new_vitals])
+                done["vitals"] = len(s.samples)
+            new_answers = s.answers[done["answers"]:]
+            if new_answers:
+                conn.execute(insert(answers), [{"session_id": s.id, **asdict(a)} for a in new_answers])
+                done["answers"] = len(s.answers)
