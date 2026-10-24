@@ -1,11 +1,11 @@
 """Expressive delivery on top of coach.py's ElevenLabs voices: audio tags, per-character tweaks, a cache.
 
 coach.py chooses each player's voice and the base settings. This module tries the expressive
-real-time model first (`eleven_v4_turbo`, which understands delivery tags like [whispers]); if that
+model first (`eleven_v4`, ElevenLabs' current default, which performs delivery tags like [whispers]); if that
 fails on this account it falls back to coach.py's model with the tags stripped, remembers that, and
 carries on. So the worst case is exactly the previous behaviour.
 
-    ELEVENLABS_EXPRESSIVE_MODEL=eleven_v4_turbo   # set to "off" to skip it entirely
+    ELEVENLABS_EXPRESSIVE_MODEL=eleven_v4   # set to "off" to skip it entirely
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import urllib.request
 from collections import OrderedDict
 
 API = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
-TAG_MODELS = {"eleven_v4_turbo", "eleven_v4", "eleven_v3", "eleven_v3_conversational"}
+TAG_MODELS = {"eleven_v4", "eleven_v3"}
 
 # Nudges on top of coach.VOICE_SETTINGS. Lower stability = more expressive; style exaggerates character.
 TWEAKS = {
@@ -31,7 +31,9 @@ TWEAKS = {
 
 # Documented ElevenLabs delivery tags we allow; anything else in [brackets] is removed.
 TAGS = ["whispers", "sighs", "laughs", "sarcastic", "curious", "excited", "mischievously", "shouting",
-        "nervous", "exhales"]
+        "nervous", "exhales", "angry", "surprised", "sad", "warmly", "softly", "dramatically", "cautiously",
+        "slowly", "chuckles", "laughs softly", "gasps", "clears throat", "trembling voice", "breathless",
+        "short pause", "pause", "interrupting", "jumping in"]
 TAG_RE = re.compile(r"\[([a-zA-Z ]{2,24})\]\s*")
 
 # Narrator lines that are always delivered a certain way.
@@ -79,7 +81,7 @@ def synthesize(text: str, speaker: str, voice: str, base_settings: dict, fallbac
     text = (text or "").strip()
     if not key or not text:
         return None
-    expressive = os.environ.get("ELEVENLABS_EXPRESSIVE_MODEL", "eleven_v4_turbo")
+    expressive = os.environ.get("ELEVENLABS_EXPRESSIVE_MODEL", "eleven_v4")
     settings = {**base_settings, **TWEAKS.get(speaker, {})}
     attempts = []
     if expressive != "off" and expressive not in _broken_models and expressive != fallback_model:

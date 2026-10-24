@@ -29,7 +29,7 @@ Bonus prizes the project touches: ElevenLabs, Gemini, Tiger Data.
    compute identical features (parity test). **Not trained yet**: no model file ships, so the game
    shows "demonstration mode". No results exist yet; do not invent any.
 2. **Expressive voices** (`backend/tilt/voices.py`, `frontend/src/sfx.js`, `backend/scripts/make_sfx.py`).
-   Delivery tags via `eleven_v4_turbo`, falling back to Ismail's model; per-character tweaks;
+   Delivery tags via `eleven_v4`, falling back to Ismail's model; per-character tweaks;
    cache; sound effects and a heartbeat that follows the town's odds on you.
 3. **Bayesian AI town** (`backend/tilt/beliefs.py`, `research/simulate_town.py`, `research/compare_bots.py`).
    Bots hold P(mafia) per player, update with Bayes' rule, vote to maximise P(mafia eliminated),
@@ -49,7 +49,7 @@ Bonus prizes the project touches: ElevenLabs, Gemini, Tiger Data.
 2. **ElevenLabs**: put `ELEVENLABS_API_KEY` in `backend/.env` (never in chat or code), verify with
    `npx -y @elevenlabs/cli@latest onboard check --env-path backend/.env --no-browser`, then
    `cd backend && python scripts/make_sfx.py`. Check the narrator actually whispers at night; if not,
-   `eleven_v4_turbo` isn't on the plan and it has fallen back.
+   `eleven_v4` isn't on the plan and it has fallen back.
 3. **Known gaps to consider**: the bots assume fair dealing but the game deals the human the
    mafia 50% of the time; `HUNCH` and `ACCUSE_HIT` in `beliefs.py` are assumptions; the 50–70%
    belief band is a bit overconfident.

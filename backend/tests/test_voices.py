@@ -32,7 +32,7 @@ def test_falls_back_to_the_existing_model_without_tags_and_remembers(monkeypatch
 
     def fake(voice, body, key):
         calls.append(body)
-        if body["model_id"] == "eleven_v4_turbo":
+        if body["model_id"] == "eleven_v4":
             raise urllib.error.HTTPError("u", 422, "bad", {}, None)
         return b"mp3"
 
@@ -50,7 +50,7 @@ def test_settings_layer_on_base_and_cache(monkeypatch):
     say("[laughs] Relax.", "Ben")
     say("[laughs] Relax.", "Ben")
     assert len(calls) == 1
-    assert calls[0]["text"] == "[laughs] Relax." and calls[0]["model_id"] == "eleven_v4_turbo"
+    assert calls[0]["text"] == "[laughs] Relax." and calls[0]["model_id"] == "eleven_v4"
     assert calls[0]["voice_settings"] == {**BASE, "style": 0.5}
 
 
