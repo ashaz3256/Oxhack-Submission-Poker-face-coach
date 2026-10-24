@@ -1,6 +1,8 @@
 """HTTP API for the spoken Mafia call."""
 from __future__ import annotations
 
+import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,8 +59,6 @@ def _step(s: MafiaSession, fn) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    import os
-
     return {"ok": True, "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")), "voice_error": coach.last_error(),
             "gemini": bool(os.environ.get("GEMINI_API_KEY")), "presage": bool(presage.api_key())}
 
@@ -144,6 +144,25 @@ def tts(body: Speech) -> Response:
         reason = (coach.last_error() or "no voice").encode("ascii", "replace").decode()[:200]
         return Response(status_code=204, headers={"X-TTS-Error": reason})
     return Response(content=audio, media_type="audio/mpeg")
+
+
+@app.post("/api/transcribe")
+async def transcribe(request: Request) -> dict:
+    """Backup speech-to-text for browsers whose built-in recognition fails: a WAV of one answer in,
+    Gemini's transcript out."""
+    from . import gemini
+
+    data = await request.body()
+    if not data or len(data) > 8 * 1024 * 1024:
+        raise HTTPException(413, "audio missing or too long")
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(503, "backup speech-to-text needs GEMINI_API_KEY")
+    text = gemini.generate(
+        "Transcribe this speech exactly, in English. Reply with only the words spoken, no quotes or notes. "
+        "If nobody speaks, reply with nothing.", audio=("audio/wav", data), temperature=0, deadline=15)
+    if text is None:
+        raise HTTPException(502, "Gemini could not transcribe that")
+    return {"text": text.strip().strip('"')}
 
 
 @app.get("/api/voice-check")

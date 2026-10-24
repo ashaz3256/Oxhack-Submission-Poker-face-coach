@@ -63,7 +63,7 @@ npm run dev                     # open http://localhost:5173 in Chrome or Edge
 **Pause** any time with the button in the sidebar or the Esc key. The current turn is thrown away and asked again when you resume.
 
 **Needs:**
-- Chrome or Edge, because they have built-in speech recognition. Other browsers get a text box instead.
+- Chrome or Edge, because they have built-in speech recognition. If it fails (Brave, blocked network, other browsers) the call records each answer and Gemini transcribes it instead, which needs `GEMINI_API_KEY`.
 - Headphones, so the AI voices don't leak into your mic.
 
 `?dev=1` gives you a text box instead of the mic, for testing.

@@ -8,7 +8,8 @@ import Pause from './Pause.jsx'
 import Report from './Report.jsx'
 import { FaceScanner } from './sensors/face.js'
 import { PresageRecorder } from './sensors/presage.js'
-import { listen, sttSupported } from './sensors/stt.js'
+import { WavRecorder } from './sensors/recorder.js'
+import { listen, markBroken, sttState, waitForSpeech } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
 import { playDeath, playIntro, playJoin, playNight, playRing, playVerdict } from './sfx.js'
 import { pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
@@ -67,6 +68,10 @@ export default function Call({ dev }) {
   const voice = useRef(null)
   const sid = useRef(null)
   const typed = useRef(null)
+  const typingRef = useRef(dev)
+  const silentFails = useRef(0)
+  const recorder = useRef(null)
+  const [typing, setTyping] = useState(dev)
   const [status, setStatus] = useState('Starting camera and microphone…')
   const [error, setError] = useState(null)
   const [game, setGame] = useState(null)
@@ -156,25 +161,52 @@ export default function Call({ dev }) {
         }
         setListening({ kind, interim: '' })
         const control = {}
-        const heard = dev || !sttSupported
-          ? new Promise((resolve) => (typed.current = resolve))
-          : listen({ ...LISTEN[kind], voice: voice.current, control, onInterim: (t) => setListening({ kind, interim: t }) })
+        const turnStart = performance.now()
+        recorder.current?.start()
+        const backup = !dev && sttState.broken
+        let heard
+        if (dev || typingRef.current) heard = new Promise((resolve) => (typed.current = resolve))
+        else if (backup) heard = waitForSpeech({ ...LISTEN[kind], voice: voice.current, control })
+        else heard = listen({ ...LISTEN[kind], voice: voice.current, control, onInterim: (t) => setListening({ kind, interim: t }) })
         const clicked = new Promise((resolve) => (choice.current = resolve))
         const stopped = new Promise((resolve) => (interrupt.current = resolve))
-        const transcript = await Promise.race([heard, clicked, stopped])
+        const [source, said] = await Promise.race([
+          heard.then((t) => ['speech', t]), clicked.then((t) => ['click', t]), stopped.then((t) => ['pause', t])])
         choice.current = null
         interrupt.current = null
         control.stop?.('')
-        setListening(null)
-        if (transcript === PAUSED) {
+        const audio = recorder.current?.stop()
+        if (source === 'pause') {
+          setListening(null)
           if (measure) {
             voice.current?.endTurn('')
             face.current?.endTurn()
           }
           continue
         }
+        const faceRaw = measure ? face.current?.endTurn() ?? {} : {}
+        let transcript = said ?? ''
+        // The browser heard nothing but the mic did: its recognition isn't working here, so send
+        // the recording to the backup transcriber instead (and use it from now on after twice).
+        const spoke = voice.current && voice.current.lastVoiceAt > turnStart + 200
+        if (source === 'speech' && !dev && !typingRef.current && audio && (backup || (!transcript && spoke))) {
+          if (!backup && ++silentFails.current >= 2) markBroken('Browser speech recognition kept hearing nothing')
+          setListening({ kind, interim: '…transcribing what you said' })
+          try {
+            transcript = await api.transcribe(audio)
+          } catch (e) {
+            markBroken(`Speech-to-text failed (${e.message}). Type your answers instead.`)
+            typingRef.current = true
+            setTyping(true)
+            setListening({ kind, interim: '' })
+            transcript = await new Promise((resolve) => (typed.current = resolve))
+          }
+        } else if (transcript) {
+          silentFails.current = 0
+        }
+        setListening(null)
         if (!measure) return { transcript, raw: {} }
-        const raw = { ...(voice.current?.endTurn(transcript) ?? {}), ...(face.current?.endTurn() ?? {}) }
+        const raw = { ...(voice.current?.endTurn(transcript) ?? {}), ...faceRaw }
         return { transcript, raw }
       }
     }
@@ -237,6 +269,7 @@ export default function Call({ dev }) {
       videoRef.current.srcObject = stream
       await videoRef.current.play()
       voice.current = new VoiceAnalyser(stream)
+      recorder.current = new WavRecorder(stream)
       setStatus('Loading the face scanner…')
       try {
         face.current = new FaceScanner()
@@ -364,7 +397,7 @@ export default function Call({ dev }) {
             <><b className="me">🎙 Your turn</b> {listening.interim || <i>{game?.awaiting?.prompt ?? 'Speak now…'}{(listening.kind === 'vote' || listening.kind === 'kill') ? ', or tap their tile' : ''}</i>}</>
           )}
         </div>
-        {(dev || !sttSupported) && listening && (
+        {typing && listening && (
           <form className="devbox" onSubmit={submitDev}>
             <input autoFocus value={devText} onChange={(e) => setDevText(e.target.value)} placeholder="Dev mode: type what you'd say" />
           </form>
@@ -385,6 +418,7 @@ export default function Call({ dev }) {
         <div className="sensors">
           <span className={live.face.face ? 'ok' : 'bad'}>Face {live.face.face ? '✓' : '✗'}</span>
           <span className={live.voice.pitch ? 'ok' : 'bad'}>Voice {live.voice.pitch ? '✓' : '…'}</span>
+          {!dev && <span className={sttState.broken ? 'bad' : 'ok'} title={sttState.error ?? ''}>{typing ? 'Typing' : sttState.broken ? 'Speech (Gemini)' : 'Speech ✓'}</span>}
           <span className={live.face.hr ? 'ok' : 'bad'}>Pulse {live.face.hr ? '✓' : '…'}</span>
           {live.presage?.enabled && (
             <span className={live.presage.status === 'ok' ? 'ok' : 'bad'} title={live.presage.error ?? 'Heart and breathing rate from Presage'}>
@@ -409,7 +443,7 @@ export default function Call({ dev }) {
           <div><b>{read?.features?.rate_z != null ? `${read.features.rate_z > 0 ? '+' : ''}${read.features.rate_z.toFixed(1)}σ` : '–'}</b><span>talking speed</span></div>
         </div>
         <Meter label="Mic level" value={live.voice.level} />
-        {!sttSupported && <p className="hint">This browser has no speech recognition. Use Chrome or Edge for hands-free play.</p>}
+        {sttState.broken && !dev && <p className="voice-warn">{sttState.error}. {typing ? '' : 'Using Gemini to transcribe instead, so answers take a couple of seconds longer.'}</p>}
         {game && <p className="hint">Game {game.number} · Day {game.day}{game.you_mafia != null ? ` · you are ${game.you_mafia ? 'the MAFIA' : 'a villager'}` : ''}</p>}
       </aside>
 

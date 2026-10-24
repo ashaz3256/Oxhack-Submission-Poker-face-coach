@@ -4,6 +4,38 @@
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
 export const sttSupported = Boolean(Recognition)
 
+// Errors that mean the browser's recognition will never work here (Brave, blocked network,
+// mic permission). After one of these we switch to the backup: record and transcribe with Gemini.
+const FATAL = new Set(['not-allowed', 'service-not-allowed', 'network', 'audio-capture', 'language-not-supported'])
+export const sttState = { broken: !sttSupported, error: sttSupported ? null : 'This browser has no built-in speech recognition' }
+
+export function markBroken(reason) {
+  sttState.broken = true
+  sttState.error = reason
+}
+
+// Backup turn-taking without recognition: wait until you've spoken and then gone quiet.
+export function waitForSpeech({ maxMs = 20000, silenceMs = 1500, voice, control }) {
+  return new Promise((resolve) => {
+    const started = performance.now()
+    let voicedMs = 0
+    let done = false
+    const finish = (override) => {
+      if (done) return
+      done = true
+      clearInterval(timer)
+      resolve(override ?? null)
+    }
+    if (control) control.stop = finish
+    const timer = setInterval(() => {
+      if (voice && voice.silentFor() < 120) voicedMs += 100
+      const spoke = voicedMs >= 300
+      if (spoke && voice.silentFor() > silenceMs) finish()
+      if (performance.now() - started > maxMs) finish()
+    }, 100)
+  })
+}
+
 // listen({ maxMs, silenceMs, voice, onInterim, control }) -> Promise<string>
 // Ends when you have said something and then gone quiet for `silenceMs`, or at `maxMs`.
 // `control.stop(text)` ends it early (a click, or the pause button) and resolves with `text`.
@@ -31,7 +63,7 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, cont
     }
     rec.onend = () => {
       // Chrome stops on its own after long silences; keep going until we decide we're done.
-      if (!done) {
+      if (!done && !sttState.broken) {
         try {
           rec.start()
         } catch {
@@ -39,7 +71,12 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, cont
         }
       }
     }
-    rec.onerror = () => {}
+    rec.onerror = (e) => {
+      if (FATAL.has(e.error)) {
+        markBroken(`Browser speech recognition failed (${e.error})`)
+        finish()
+      }
+    }
 
     const finish = (override) => {
       if (done) return
@@ -62,6 +99,11 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, cont
       if (now - started > maxMs) finish()
     }, 150)
 
-    rec.start()
+    try {
+      rec.start()
+    } catch (e) {
+      markBroken(`Browser speech recognition failed (${e.name})`)
+      finish()
+    }
   })
 }

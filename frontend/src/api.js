@@ -8,7 +8,14 @@ async function call(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
+async function transcribe(blob) {
+  const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText)
+  return (await res.json()).text
+}
+
 export const api = {
+  transcribe,
   create: () => call('POST', '/sessions', {}),
   calibrate: (sid, transcript, raw, isLie, question) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw, is_lie: isLie, question }),
   newGame: (sid) => call('POST', `/sessions/${sid}/games`),

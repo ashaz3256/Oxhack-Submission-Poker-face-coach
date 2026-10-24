@@ -3,7 +3,6 @@ import { api } from './api.js'
 import Call from './Call.jsx'
 import Report from './Report.jsx'
 import Splash from './Splash.jsx'
-import { sttSupported } from './sensors/stt.js'
 import { unlockAudio } from './tts.js'
 
 const params = new URLSearchParams(window.location.search)
@@ -60,7 +59,7 @@ export default function App() {
         <li>The AIs hear your tells. Lie badly and they vote you out.</li>
       </ol>
       <button className="primary big join" onClick={join}>🩸 Join the call</button>
-      <p className="hint">Needs a webcam and microphone. {sttSupported ? 'Hands-free from here on.' : 'Use Chrome or Edge for speech recognition.'}</p>
+      <p className="hint">Needs a webcam and microphone. Hands-free from here on. Chrome or Edge work best.</p>
       <button className="link" disabled={busy} onClick={demo}>{busy ? 'Simulating 15 games…' : 'See a demo report (simulated player)'}</button>
     </div>
     </div>

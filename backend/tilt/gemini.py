@@ -3,6 +3,7 @@ the game must never wait long or die because of it. We try a short list of model
 whichever answered last."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import time
@@ -28,7 +29,7 @@ def models() -> list[str]:
 
 
 def generate(prompt: str, *, json_mode: bool = False, temperature: float | None = None,
-             deadline: float = 10.0) -> str | None:
+             deadline: float = 10.0, audio: tuple[str, bytes] | None = None) -> str | None:
     """The model's text, or None if there is no key or nothing answered within `deadline` seconds."""
     global _preferred
     key = os.environ.get("GEMINI_API_KEY")
@@ -39,7 +40,10 @@ def generate(prompt: str, *, json_mode: bool = False, temperature: float | None 
         config["responseMimeType"] = "application/json"
     if temperature is not None:
         config["temperature"] = temperature
-    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}], "generationConfig": config}).encode()
+    parts = [{"text": prompt}]
+    if audio:
+        parts.append({"inline_data": {"mime_type": audio[0], "data": base64.b64encode(audio[1]).decode()}})
+    body = json.dumps({"contents": [{"parts": parts}], "generationConfig": config}).encode()
     stop = time.time() + deadline
     for model in models():
         left = stop - time.time()
