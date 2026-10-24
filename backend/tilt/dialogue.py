@@ -51,7 +51,8 @@ CUE_CALLOUTS = {
 }
 CALM = ["Okay. That sounded honest to me.", "Fair enough, I believe you. For now.", "Hm. Steady answer.",
         "That checks out, I think."]
-DOUBT = ["I'm not buying it.", "That doesn't add up.", "Convenient.", "Interesting answer. Too interesting."]
+DOUBT = ["[sarcastic] I'm not buying it.", "That doesn't add up.", "[sarcastic] Convenient.",
+         "[curious] Interesting answer. Too interesting."]
 
 
 def _gemini(prompt: str) -> list[dict] | None:
@@ -76,7 +77,7 @@ def ai_lines(*, speakers: list[str], task: str, game: dict, rng: random.Random, 
     """Lines for `speakers`, in order. `game` is the public context; `fallback` builds template lines."""
     prompt = (
         "You write dialogue for AI players in a spoken game of Mafia with one human. Stay in character, "
-        "sound natural when read aloud, max 22 words per line, no stage directions, no emoji.\n"
+        "sound natural when read aloud, max 22 words per line, no emoji. You may start a line with ONE delivery tag in square brackets when it fits the moment, chosen from [sarcastic], [nervous], [laughs], [sighs], [whispers], [curious], [excited], [mischievously], [shouting]; no other stage directions.\n"
         f"Players and personas: {json.dumps({s: PERSONAS[s] for s in speakers})}\n"
         f"Game state (secret roles are only known to the mafia player, never reveal them): {json.dumps(game)}\n"
         f"Task: {task}\n"

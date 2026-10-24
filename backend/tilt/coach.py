@@ -7,19 +7,7 @@ import urllib.request
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-# ElevenLabs premade voices, one per player. Override any with ELEVENLABS_VOICE_<NAME>.
-DEFAULT_VOICES = {
-    "Narrator": "JBFqnCBsd6RMkjVDRZzb",  # George
-    "Ava": "EXAVITQu4vr4xnSDxMaL",       # Sarah
-    "Ben": "pNInz6obpgDQGcFmaJgB",       # Adam
-    "Cleo": "21m00Tcm4TlvDq8ikWAM",      # Rachel
-    "Dev": "ErXwobaYiN019PkySvjV",       # Antoni
-    "Eli": "VR6AewLTigWG4xSOukaG",       # Arnold
-}
-
-
-def voice_for(speaker: str) -> str:
-    return os.environ.get(f"ELEVENLABS_VOICE_{speaker.upper()}", DEFAULT_VOICES.get(speaker, DEFAULT_VOICES["Narrator"]))
+from .voices import DEFAULT_VOICES, voice_for  # noqa: E402,F401  (kept for existing imports)
 
 
 def _post_json(url: str, body: dict, headers: dict, timeout: int = 30) -> bytes:
@@ -29,15 +17,9 @@ def _post_json(url: str, body: dict, headers: dict, timeout: int = 30) -> bytes:
 
 
 def speak(text: str, speaker: str) -> bytes | None:
-    """MP3 bytes from ElevenLabs, or None (the browser then uses its own voices)."""
-    key = os.environ.get("ELEVENLABS_API_KEY")
-    if not key:
-        return None
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_for(speaker)}"
-    try:
-        return _post_json(url, {"text": text, "model_id": "eleven_flash_v2_5"}, {"xi-api-key": key, "Accept": "audio/mpeg"})
-    except Exception:
-        return None
+    """MP3 bytes from ElevenLabs (see voices.py), or None (the browser then uses its own voices)."""
+    from .voices import speak as eleven
+    return eleven(text, speaker)
 
 
 def review(report: dict, summary: str) -> dict:

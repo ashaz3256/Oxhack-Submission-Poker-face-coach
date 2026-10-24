@@ -5,7 +5,8 @@ import Report from './Report.jsx'
 import { FaceScanner } from './sensors/face.js'
 import { listen, sttSupported } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
-import { say } from './tts.js'
+import { cueFor, heartbeat, preloadSfx, stopLoop } from './sfx.js'
+import { cleanText, prefetch, say } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
 const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓' }
@@ -50,6 +51,7 @@ export default function Call({ dev }) {
   const voice = useRef(null)
   const sid = useRef(null)
   const typed = useRef(null)
+  const lastRead = useRef(null)
   const [status, setStatus] = useState('Starting camera and microphone…')
   const [error, setError] = useState(null)
   const [game, setGame] = useState(null)
@@ -80,6 +82,7 @@ export default function Call({ dev }) {
 
     async function hear(kind) {
       const measure = kind === 'answer' || kind === 'calibrate'
+      if (kind === 'answer') heartbeat(lastRead.current?.p_lie)
       if (measure) {
         face.current?.beginTurn()
         voice.current?.beginTurn()
@@ -92,15 +95,18 @@ export default function Call({ dev }) {
         transcript = await listen({ ...LISTEN[kind], voice: voice.current, onInterim: (t) => setListening({ kind, interim: t }) })
       }
       setListening(null)
+      stopLoop('heartbeat')
       if (!measure) return { transcript, raw: {}, faceFrames: null }
       const raw = { ...(voice.current?.endTurn(transcript) ?? {}), ...(face.current?.endTurn() ?? {}) }
       return { transcript, raw, faceFrames: face.current?.lastFrames ?? null }
     }
 
     async function speakLines(lines, state) {
-      for (const line of lines) {
+      for (const [i, line] of lines.entries()) {
         if (cancelled) return
-        setSpeaking({ speaker: line.speaker, text: line.text, level: 0 })
+        if (lines[i + 1]) prefetch(lines[i + 1].speaker, lines[i + 1].text)
+        cueFor(line.speaker, line.text)
+        setSpeaking({ speaker: line.speaker, text: cleanText(line.text), level: 0 })
         const drew = line.text.match(/^You drew card (\d)/)
         if (drew && state.game) {
           setDeal({ picked: Number(drew[1]), youMafia: state.game.you_mafia, cards: cardOwners(state.game.players) })
@@ -130,6 +136,7 @@ export default function Call({ dev }) {
         setError(`Face scanner failed to load (${e.message}). Voice and words are still analysed.`)
       }
       setStatus(null)
+      preloadSfx()
       sid.current = (await api.create()).session_id
 
       for (const prompt of CALIBRATION) {
@@ -142,7 +149,10 @@ export default function Call({ dev }) {
       let state = await api.newGame(sid.current)
       while (!cancelled) {
         setGame(state.game)
-        if (state.read) setRead(state.read)
+        if (state.read) {
+          setRead(state.read)
+          lastRead.current = state.read
+        }
         if (state.game?.awaiting?.kind === 'pick') setDeal({ picked: null, youMafia: null })
         await speakLines(state.lines, state)
         const awaiting = state.game?.awaiting

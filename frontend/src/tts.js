@@ -11,6 +11,9 @@ const BROWSER = {
 }
 
 let audioCtx = null
+export function audioContext() {
+  return ctx()
+}
 function ctx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
   return audioCtx
@@ -59,7 +62,7 @@ function browserSpeak(speaker, text, onLevel) {
     if (!('speechSynthesis' in window)) return resolve()
     const cfg = BROWSER[speaker] ?? BROWSER.Narrator
     const voices = englishVoices()
-    const u = new SpeechSynthesisUtterance(text)
+    const u = new SpeechSynthesisUtterance(cleanText(text))
     if (voices.length) u.voice = voices[cfg.pick % voices.length]
     u.pitch = cfg.pitch
     u.rate = cfg.rate
@@ -85,17 +88,38 @@ function browserSpeak(speaker, text, onLevel) {
 
 const FAST = new URLSearchParams(window.location.search).has('fast') // for automated tests
 
-export async function say(speaker, text, onLevel) {
-  if (FAST) return new Promise((r) => setTimeout(r, 60))
-  try {
-    const res = await fetch('/api/tts', {
+// Delivery tags like [whispers] are for the voice model, not for captions or browser voices.
+export const cleanText = (text) => (text || '').replace(/\[[a-zA-Z ]{2,24}\]\s*/g, '').trim()
+
+// Audio is fetched ahead: while one player talks, the next line is already being generated.
+const pending = new Map()
+function fetchAudio(speaker, text) {
+  const key = `${speaker}|${text}`
+  if (!pending.has(key)) {
+    pending.set(key, fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, speaker }),
-    })
-    if (res.status === 200) return await playMp3(await res.blob(), onLevel)
-  } catch {
-    // fall through to the browser voice
+    }).then((res) => (res.status === 200 ? res.blob() : null)).catch(() => null))
+    if (pending.size > 40) pending.delete(pending.keys().next().value)
+  }
+  return pending.get(key)
+}
+
+export function prefetch(speaker, text) {
+  if (!FAST && speaker && text) fetchAudio(speaker, text)
+}
+
+export async function say(speaker, text, onLevel) {
+  if (FAST) return new Promise((r) => setTimeout(r, 60))
+  const blob = await fetchAudio(speaker, text)
+  pending.delete(`${speaker}|${text}`)
+  if (blob) {
+    try {
+      return await playMp3(blob, onLevel)
+    } catch {
+      // fall through to the browser voice
+    }
   }
   return browserSpeak(speaker, text, onLevel)
 }
