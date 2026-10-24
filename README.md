@@ -1,77 +1,77 @@
 # Tilt
 
-**Your body is leaking information. Tilt measures how much it costs you.**
+**Mafia on a video call with five AIs, and every word you say is checked for lies.**
 
-You play **Mafia** against five AI players while your heart rate and breathing are read from your webcam. Every day an **Inspector** questions you. Because we know your secret role, every answer is labelled as a lie or the truth the moment you give it.
+Everyone draws a card, and yours makes you either the **mafia** or a **villager**. Five AI players, each with their own voice, talk, accuse and question you. You never type or click; you just talk.
 
-There are two Inspectors, and they share every rule but one:
-- The **Reader** checks your vitals while you answer.
-- The **Blind** Inspector only knows how often you lie.
+While you answer, Tilt watches and listens:
+- **Face:** your eyes, eyebrows and mouth.
+- **Voice:** your pitch and how fast you speak.
+- **Words:** what you say.
 
-Every day's vote is computed both ways with the same dice. The extra votes your body drew, and the days it got you caught, are measured directly.
-
-A poker mode is also included. In it a **Shark** bot reads your vitals to call your bluffs, and an **Honest** bot does not.
+A machine learning model learns when you are lying. The AIs hear your tells, so if you lie badly they vote you out.
 
 Built at OxHack 2026 for the HRT prize, Best Use of Data for Predictions and Decision Making.
 
-## How the prediction works (poker mode)
+## What it measures
 
-- **Self-labelling data.** We deal the cards, so every decision is labelled the moment it's made. A bet with under 50% equity against a random hand is a bluff. A call well below the pot odds, or a fold well above them, is a bad decision.
-- **Features.** These come from the 10 seconds before each action: heart rate and breathing as z-scores against your first 45 seconds, heart rate slope, and time to act. The tilt model also uses your last hand's result and your drawdown.
-- **Shark tell model.** An online logistic regression predicts P(bluff | vitals). It is refit after every bet and shrunk toward your base bluff rate while data is thin.
-- **Decision rule.** Both bots call when `p_bluff * equity_vs_weak + (1 - p_bluff) * equity_vs_strong > pot odds`. The Shark gets its `p_bluff` from your body. The Honest bot gets it from your historical frequency.
-- **Honest evaluation.**
-  - The Shark's AUC uses its read at the time of each bet, before it learns that bet's answer, so it is out-of-sample.
-  - The cost of your tells is the paired EV difference on the same bets, assuming a check-down if called. It is reported with a standard error.
-- **Tilt model.** This predicts P(bad call or fold) from the same vitals plus tilt context.
+| Source | Signals | How |
+| --- | --- | --- |
+| Face | blink rate, raised brows, frowning, pressed lips, looking away, smile, head movement | MediaPipe Face Landmarker: 478 points plus 52 blendshapes, at about 20 fps in the browser |
+| Heart | heart rate | webcam pulse (rPPG) from the green channel of your forehead |
+| Voice | pitch, pitch wobble, loudness, talking speed, pauses, time to start | Web Audio: autocorrelation pitch plus voiced/silent frames |
+| Words | hedges ("honestly", "trust me"), ums, denials, answer length | speech-to-text transcript |
 
-## How the prediction works (Mafia)
+Each answer is turned into z-scores against **your own baseline**, recorded in two honest calibration questions at the start.
 
-- **Labels.** Some answers are lies when you are the mafia: denying it, accusing someone, or claiming you were asleep. Claiming you saw someone at night is a lie for anyone. Evasions are not labelled, but they raise suspicion.
-- **Features.** The same vitals features as poker, measured over the 10 seconds before you answer, plus the time you took to answer.
-- **The Inspector's lie model.** An online logistic regression that is refit after every answer. The town adds `2.5 x (today's mean lie read - your base lie rate)` to its suspicion of you.
-- **Metrics.**
-  - Out-of-sample lie-detection AUC.
-  - Votes on you per day as the mafia, Reader vs Blind.
-  - Days you were caught, Reader vs Blind.
-- **Simulated check.** With simulated vitals (leakiness 1), the Reader caught the mafia on 7 to 9 days, against 1 to 4 for the Blind Inspector. That is over 20 games with 8 to 12 as the mafia. With leakiness 0 the two were about equal.
+## How the prediction works
+
+- **Labels.**
+  - As the mafia, everything you say in the discussion serves a lie. Every answer of three or more words is labelled a lie when you are the mafia and the truth when you are not.
+  - The two calibration answers are labelled true.
+- **Model.** An online logistic regression over 18 face, voice and word features. It is refit after every answer and shrunk toward your base lie rate while data is thin.
+- **Out-of-sample.**
+  - Each lie read is made *before* the model learns that answer's label.
+  - The AUC in the report is therefore prequential and never trained on the answer it scores.
+- **Decision.** The AI town adds `2.5 x (lie read - your base rate)` to its suspicion of you after each answer.
+- **Counterfactual.** Every vote is replayed with your tells removed, using the same random draws. The report shows how many days your body got you caught, versus how many it would have been if nobody could read you.
 
 ## Run it
 
 ```bash
 # backend
 cd backend
-python -m venv .venv && . .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env            # optional keys: Tiger Data, Gemini, ElevenLabs
+cp .env.example .env            # optional keys: Gemini, ElevenLabs, Tiger Data
 uvicorn tilt.api:app --reload --port 8000
 
 # frontend (second terminal)
 cd frontend
 npm install
-npm run dev                     # http://localhost:5173
+npm run dev                     # open http://localhost:5173 in Chrome or Edge
 ```
 
+1. Click **Join the call** and allow the camera and microphone. This is the only click.
+2. Answer the two calibration questions out loud.
+3. When the cards appear, say a number from one to six.
+4. Answer the AIs' questions. At vote time, say a name.
+5. When the game ends, say "play again".
+
+**Needs:**
+- Chrome or Edge, because they have built-in speech recognition. Other browsers get a text box instead.
+- Headphones, so the AI voices don't leak into your mic.
+
+`?dev=1` gives you a text box instead of the mic, for testing.
+
+## Optional keys (`backend/.env`)
+
+- `GEMINI_API_KEY`: the AIs improvise their lines and react to your tells, and Gemini writes and speaks your post-game review. Without it they use varied templates.
+- `ELEVENLABS_API_KEY`: each player gets their own ElevenLabs voice. Override any voice with `ELEVENLABS_VOICE_AVA` and so on. Without it, each player gets a distinct browser voice with its own pitch and speed.
+- `DATABASE_URL`: a Postgres connection string for **Tiger Data**. Run `backend/schema.sql` once so `utterances` becomes a hypertable. The default is local SQLite.
+
+## Demo safety net
+
+**See a demo report** on the start screen simulates 15 games with a scripted player whose face and voice drift when they lie. The cue sizes in that simulation are made up; real numbers come from real games.
+
 Tests: `cd backend && pytest -q`.
-
-## Vitals sources
-
-| Source | What it is |
-| --- | --- |
-| Simulated | Arousal rises with weak hands in big pots and after big losses. Use the leakiness slider to set how much shows; 0 is a perfect poker face. Use this mode when the camera or the SDK is unavailable. |
-| Webcam pulse | In-browser rPPG: the green channel of a forehead patch, then the FFT peak in the 45–180 bpm band. Needs steady light. |
-| Presage | Pipe SmartSpectra readings as JSON lines into `backend/presage_bridge.py --session <id>`. |
-
-## Stack
-
-- React (Vite) front end
-- FastAPI back end
-- scikit-learn for the models
-- `treys` for hand evaluation
-- Postgres on **Tiger Data**: run `backend/schema.sql` once so `vitals` becomes a hypertable
-- **Gemini** for the session review
-- **ElevenLabs** for the voice coach (falls back to the browser's voice)
-
-## Demo mode
-
-**Demo report (simulated)** on the start screen plays 60 hands with a scripted player and simulated vitals. You get a full leak report even if the live setup fails on stage.

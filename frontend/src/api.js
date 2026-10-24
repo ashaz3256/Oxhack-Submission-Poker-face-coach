@@ -9,55 +9,11 @@ async function call(method, path, body) {
 }
 
 export const api = {
-  createSession: (opts) => call('POST', '/sessions', opts),
-  newHand: (sid) => call('POST', `/sessions/${sid}/hands`),
-  act: (sid, action) => call('POST', `/sessions/${sid}/action`, { action }),
-  simTick: (sid) => call('POST', `/sessions/${sid}/sim-tick`),
-  sendVitals: (sid, samples) => call('POST', `/sessions/${sid}/vitals`, { samples }),
-  live: (sid) => call('GET', `/sessions/${sid}/live`),
+  create: () => call('POST', '/sessions', {}),
+  calibrate: (sid, transcript, raw) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw }),
+  newGame: (sid) => call('POST', `/sessions/${sid}/games`),
+  speak: (sid, transcript, raw) => call('POST', `/sessions/${sid}/speak`, { transcript, raw }),
   report: (sid) => call('GET', `/sessions/${sid}/report`),
   review: (sid) => call('POST', `/sessions/${sid}/review`),
-  demo: (hands = 60) => call('POST', `/demo?hands=${hands}`),
-}
-
-let speaking = false
-export async function speak(text) {
-  if (speaking) return
-  speaking = true
-  try {
-    const res = await fetch('/api/speak', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-    if (res.status === 200) {
-      const audio = new Audio(URL.createObjectURL(await res.blob()))
-      await audio.play()
-      await new Promise((r) => (audio.onended = r))
-    } else if ('speechSynthesis' in window) {
-      await new Promise((r) => {
-        const u = new SpeechSynthesisUtterance(text)
-        u.onend = r
-        window.speechSynthesis.speak(u)
-      })
-    }
-  } catch {
-    // voice is a nice-to-have; never break the table over it
-  } finally {
-    speaking = false
-  }
-}
-
-export const mafia = {
-  create: (opts) => call('POST', '/mafia/sessions', opts),
-  newGame: (sid) => call('POST', `/mafia/sessions/${sid}/games`),
-  answer: (sid, option) => call('POST', `/mafia/sessions/${sid}/answer`, { option }),
-  vote: (sid, target) => call('POST', `/mafia/sessions/${sid}/vote`, { target }),
-  kill: (sid, target) => call('POST', `/mafia/sessions/${sid}/kill`, { target }),
-  simTick: (sid) => call('POST', `/mafia/sessions/${sid}/sim-tick`),
-  sendVitals: (sid, samples) => call('POST', `/mafia/sessions/${sid}/vitals`, { samples }),
-  live: (sid) => call('GET', `/mafia/sessions/${sid}/live`),
-  report: (sid) => call('GET', `/mafia/sessions/${sid}/report`),
-  review: (sid) => call('POST', `/mafia/sessions/${sid}/review`),
-  demo: (games = 15) => call('POST', `/mafia/demo?games=${games}`),
+  demo: () => call('POST', '/demo'),
 }

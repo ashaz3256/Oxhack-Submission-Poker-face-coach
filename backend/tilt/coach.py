@@ -1,80 +1,62 @@
-"""Live coaching lines, the Gemini session review and ElevenLabs speech. Every call works without keys."""
+"""Voices (ElevenLabs) and the post-game review (Gemini). Both work without keys."""
 from __future__ import annotations
 
 import json
 import os
 import urllib.request
 
-from .features import TELL_FEATURES, vector, vitals_features
-from .game import Session
-from .report import headline, leak_report
-
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-ELEVEN_VOICE = os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
+
+# ElevenLabs premade voices, one per player. Override any with ELEVENLABS_VOICE_<NAME>.
+DEFAULT_VOICES = {
+    "Narrator": "JBFqnCBsd6RMkjVDRZzb",  # George
+    "Ava": "EXAVITQu4vr4xnSDxMaL",       # Sarah
+    "Ben": "pNInz6obpgDQGcFmaJgB",       # Adam
+    "Cleo": "21m00Tcm4TlvDq8ikWAM",      # Rachel
+    "Dev": "ErXwobaYiN019PkySvjV",       # Antoni
+    "Eli": "VR6AewLTigWG4xSOukaG",       # Arnold
+}
 
 
-def live_read(session: Session) -> dict:
-    """What the Shark sees right now, and what the coach says about it."""
-    now = session.clock()
-    f = vitals_features(session.samples, now)
-    hand = session.current_hand
-    f["decision_s"] = now - hand.street_started_at if hand and hand.phase != "done" else 0.0
-    p_bluff = session.tell_model.predict(vector(f, TELL_FEATURES))
-    latest = session.samples[-1] if session.samples else None
-    hr_z = f["hr_z"]
-    if not session.tell_model.ready:
-        line = "The Shark is still studying you."
-    elif p_bluff > 0.6:
-        line = f"You're broadcasting. If you bet now, the Shark reads {p_bluff:.0%} bluff."
-    elif hr_z > 1.5:
-        line = "Heart rate is up. Slow your breathing before you act."
-    else:
-        line = "Poker face holding."
-    return {
-        "hr": None if latest is None else latest.hr,
-        "br": None if latest is None else latest.br,
-        "hr_z": round(hr_z, 2),
-        "shark_p_bluff": round(p_bluff, 3),
-        "shark_ready": session.tell_model.ready,
-        "line": line,
-    }
+def voice_for(speaker: str) -> str:
+    return os.environ.get(f"ELEVENLABS_VOICE_{speaker.upper()}", DEFAULT_VOICES.get(speaker, DEFAULT_VOICES["Narrator"]))
 
 
-def _post_json(url: str, body: dict, headers: dict) -> bytes:
+def _post_json(url: str, body: dict, headers: dict, timeout: int = 30) -> bytes:
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", **headers})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
 
-def session_review(session: Session) -> dict:
-    report = leak_report(session)
-    report["tells"].pop("curve", None)
-    return review_from_report(report, headline(report), game="poker")
+def speak(text: str, speaker: str) -> bytes | None:
+    """MP3 bytes from ElevenLabs, or None (the browser then uses its own voices)."""
+    key = os.environ.get("ELEVENLABS_API_KEY")
+    if not key:
+        return None
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_for(speaker)}"
+    try:
+        return _post_json(url, {"text": text, "model_id": "eleven_flash_v2_5"}, {"xi-api-key": key, "Accept": "audio/mpeg"})
+    except Exception:
+        return None
 
 
-def review_from_report(report: dict, summary: str, game: str) -> dict:
+def review(report: dict, summary: str) -> dict:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         return {"source": "template", "text": summary}
+    slim = {k: v for k, v in report.items() if k != "timeline"}
+    slim["sample_answers"] = [{"said": t["text"], "lie": t["lie"], "read": t["p_lie"], "cues": t["cues"]}
+                              for t in report.get("timeline", [])[-8:]]
     prompt = (
-        f"You are a blunt coach reviewing a {game} session where an AI read the player's heart rate and breathing "
-        "to tell when they were bluffing or lying. Using only the JSON below, write 4 short sentences: how much the "
-        "player's body gave away, which signal gave them away, what it cost them, and one concrete drill for next "
-        "session. No markdown.\n\n" + json.dumps(report)
+        "You are a blunt deception coach reviewing a spoken Mafia session. A model read the player's face "
+        "(blinks, gaze, brows, lips), voice (pitch, speed, pauses) and words to spot lies. Using only the JSON "
+        "below, write 4 short sentences for the player, spoken aloud: how readable their lies were, the tells "
+        "that gave them away, what it cost them in the game, and one drill to fix it. No markdown.\n\n"
+        + json.dumps(slim)
     )
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     try:
         raw = _post_json(url, {"contents": [{"parts": [{"text": prompt}]}]}, {"x-goog-api-key": key})
-        text = json.loads(raw)["candidates"][0]["content"]["parts"][0]["text"]
-        return {"source": "gemini", "text": text.strip()}
+        return {"source": "gemini", "text": json.loads(raw)["candidates"][0]["content"]["parts"][0]["text"].strip()}
     except Exception as exc:  # the demo must not die on a flaky network
         return {"source": "template", "text": summary, "error": str(exc)}
-
-
-def speak(text: str) -> bytes | None:
-    """MP3 bytes from ElevenLabs, or None when no key is set (the browser falls back to speechSynthesis)."""
-    key = os.environ.get("ELEVENLABS_API_KEY")
-    if not key:
-        return None
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE}"
-    return _post_json(url, {"text": text, "model_id": "eleven_flash_v2_5"}, {"xi-api-key": key, "Accept": "audio/mpeg"})

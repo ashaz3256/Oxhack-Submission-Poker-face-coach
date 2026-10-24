@@ -1,22 +1,31 @@
 -- Tiger Data (TimescaleDB) setup. The app creates these tables itself on plain Postgres or SQLite;
--- run this once on Tiger Data first so `vitals` becomes a hypertable.
+-- run this once on Tiger Data first so `utterances` becomes a hypertable.
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     player TEXT,
-    opponent TEXT,
-    vitals_source TEXT,
-    created_at DOUBLE PRECISION,
-    net_bb DOUBLE PRECISION
+    created_at DOUBLE PRECISION
 );
 
-CREATE TABLE IF NOT EXISTS vitals (
+CREATE TABLE IF NOT EXISTS utterances (
+    id SERIAL,
     session_id TEXT NOT NULL,
     t DOUBLE PRECISION NOT NULL,   -- unix seconds
-    hr DOUBLE PRECISION,
-    br DOUBLE PRECISION
+    game INTEGER,
+    day INTEGER,
+    kind TEXT,                     -- calibration | answer
+    question TEXT,
+    transcript TEXT,
+    role TEXT,                     -- mafia | villager
+    raw JSON,                      -- face + voice measurements from the browser
+    features JSON,                 -- z-scores vs the player's baseline + word cues
+    is_lie BOOLEAN,
+    p_lie DOUBLE PRECISION,        -- the model's read before it learned the label
+    p_blind DOUBLE PRECISION,
+    cues JSON
 );
-SELECT create_hypertable('vitals', by_range('t', 3600), if_not_exists => TRUE);
-CREATE INDEX IF NOT EXISTS vitals_session_t ON vitals (session_id, t DESC);
+SELECT create_hypertable('utterances', by_range('t', 86400), if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS utterances_session_t ON utterances (session_id, t DESC);
 
--- Example: heart rate per 5 seconds around one session's decisions.
--- SELECT time_bucket(5, t) AS bucket, avg(hr) FROM vitals WHERE session_id = '...' GROUP BY bucket ORDER BY bucket;
+-- Example: how the lie read evolved per minute across all players.
+-- SELECT time_bucket(60, t) AS minute, avg(p_lie) FILTER (WHERE is_lie) AS lies, avg(p_lie) FILTER (WHERE NOT is_lie) AS truths
+-- FROM utterances WHERE kind = 'answer' GROUP BY minute ORDER BY minute;

@@ -1,4 +1,4 @@
-"""Small online models: the Shark's tell reader and the tilt (bad decision) predictor."""
+"""A small online model: logistic regression refit after every labelled answer."""
 from __future__ import annotations
 
 import numpy as np
@@ -43,6 +43,14 @@ class OnlineLogit:
         # Shrink toward the base rate while the model has little data.
         w = len(self.y) / (len(self.y) + self.prior_weight)
         return w * p + (1 - w) * self.base_rate()
+
+    def contributions(self, x: list[float]) -> dict[str, float]:
+        """How much each feature pushed this prediction, in log-odds."""
+        if self._pipe is None:
+            return {}
+        scaled = self._pipe[0].transform(np.array([x]))[0]
+        coef = self._pipe[-1].coef_[0]
+        return {n: float(c * v) for n, c, v in zip(self.feature_names, coef, scaled)}
 
     def coefficients(self) -> dict[str, float]:
         if self._pipe is None:

@@ -1,93 +1,65 @@
-"""The leak report: what your body gave away, and what it cost."""
+"""The leak report: how well your face, voice and words gave your lies away, and what it cost you."""
 from __future__ import annotations
 
 import numpy as np
 
-from .game import Session
+from .cues import LABELS, RAW
+from .mafia import MafiaSession
 from .models import safe_auc
 
-BET_ACTIONS = ("bet_half", "bet_pot")
 
+def report(s: MafiaSession) -> dict:
+    answers = [u for u in s.utterances if u.kind == "answer" and u.is_lie is not None]
+    lies = [u for u in answers if u.is_lie]
+    truths = [u for u in answers if not u.is_lie]
+    # Prequential: each read was made before the model learned whether that answer was a lie.
+    auc = safe_auc([int(u.is_lie) for u in answers], [u.p_lie for u in answers])
 
-def leak_report(session: Session) -> dict:
-    hands = [h for h in session.hands if h.result_bb is not None]
-    bets = [d for d in session.decisions if d.action in BET_ACTIONS]
-    facing = [d for d in session.decisions if d.is_bad is not None]
+    def mean(rows, key, raw=True):
+        vals = [(r.raw if raw else r.features).get(key) for r in rows]
+        vals = [v for v in vals if v is not None and v == v]
+        return round(float(np.mean(vals)), 3) if vals else None
 
-    # Prequential: the Shark's read *at the time of each bet*, before it learned that bet's label.
-    y = [int(bool(d.is_bluff)) for d in bets]
-    shark_auc = safe_auc(y, [d.p_bluff_shark for d in bets])
+    cues = []
+    for k in RAW:
+        cues.append({"key": k, "label": LABELS[f"{k}_z"], "lie": mean(lies, k), "truth": mean(truths, k),
+                     "lie_z": mean(lies, f"{k}_z", raw=False), "truth_z": mean(truths, f"{k}_z", raw=False)})
+    for k in ("hedges", "fillers", "negations"):
+        cues.append({"key": k, "label": LABELS[k], "lie": mean(lies, k, raw=False),
+                     "truth": mean(truths, k, raw=False), "lie_z": None, "truth_z": None})
 
-    cost = [d.ev_vs_honest - d.ev_vs_shark for d in bets]
-    cost_total = float(np.sum(cost)) if cost else 0.0
-    # Standard error of the total, so a small sample is not oversold.
-    cost_se = float(np.std(cost, ddof=1) * np.sqrt(len(cost))) if len(cost) > 1 else None
-    n_hands = max(len(hands), 1)
-
-    # Learning curve: cumulative chips lost to tells, bet by bet.
-    curve = []
-    running = 0.0
-    for i, (d, c) in enumerate(zip(bets, cost), start=1):
-        running += c
-        curve.append({"bet": i, "hand": d.hand_number, "cost_bb": round(running, 2),
-                      "p_bluff": d.p_bluff_shark, "bluff": bool(d.is_bluff)})
-
-    bluffs = [d for d in bets if d.is_bluff]
-    values = [d for d in bets if not d.is_bluff]
-
-    def mean(rows, key):
-        vals = [r.features.get(key) for r in rows if r.features.get(key) == r.features.get(key)]
-        return round(float(np.mean(vals)), 2) if vals else None
-
-    tells = {
-        f: {"bluff": mean(bluffs, f), "value": mean(values, f)}
-        for f in ("hr", "hr_z", "hr_slope", "br_z", "decision_s")
-    }
-
-    stressed = [d for d in facing if d.features.get("hr_z", 0) > 1]
-    calm = [d for d in facing if d.features.get("hr_z", 0) <= 1]
-
-    def rate(rows):
-        return round(sum(bool(d.is_bad) for d in rows) / len(rows), 3) if rows else None
-
+    as_mafia = [v for v in s.votes if v.you_mafia]
+    finished = [g for g in s.games if g.phase == "over"]
+    mafia_games = [g for g in finished if g.you_mafia]
+    coef = {LABELS.get(k, k): v for k, v in s.lie_model.coefficients().items()}
     return {
-        "session_id": session.id,
-        "opponent": session.opponent,
-        "vitals_source": session.vitals_source,
-        "hands": len(hands),
-        "net_bb": round(session.net_bb, 2),
-        "bb_per_100": round(100 * session.net_bb / n_hands, 1),
-        "tells": {
-            "bets": len(bets),
-            "bluffs": len(bluffs),
-            "shark_auc": shark_auc,
-            "coefficients": session.tell_model.coefficients(),
-            "means": tells,
-            "cost_bb": round(cost_total, 2),
-            "cost_se_bb": None if cost_se is None else round(cost_se, 2),
-            "cost_bb_per_100": round(100 * cost_total / n_hands, 1),
-            "curve": curve,
-        },
-        "tilt": {
-            "decisions": len(facing),
-            "bad": sum(bool(d.is_bad) for d in facing),
-            "bad_rate_stressed": rate(stressed),
-            "bad_rate_calm": rate(calm),
-            "model_auc": safe_auc([int(bool(d.is_bad)) for d in facing], [d.p_bad for d in facing]),
-            "coefficients": session.tilt_model.coefficients(),
-        },
+        "session_id": s.id,
+        "games": len(finished),
+        "games_as_mafia": len(mafia_games),
+        "mafia_wins": sum(g.winner == "mafia" for g in mafia_games),
+        "answers": len(answers),
+        "lies": len(lies),
+        "lie_auc": auc,
+        "coefficients": coef,
+        "cues": cues,
+        "days_as_mafia": len(as_mafia),
+        "votes_on_you_reader": round(float(np.mean([v.votes_on_you_reader for v in as_mafia])), 2) if as_mafia else None,
+        "votes_on_you_blind": round(float(np.mean([v.votes_on_you_blind for v in as_mafia])), 2) if as_mafia else None,
+        "caught_by_reader": sum(v.out_reader for v in as_mafia),
+        "caught_by_blind": sum(v.out_blind for v in as_mafia),
+        "timeline": [{"i": i, "p_lie": u.p_lie, "lie": bool(u.is_lie), "text": u.transcript, "cues": u.cues,
+                      "game": u.game, "day": u.day} for i, u in enumerate(answers, start=1)],
     }
 
 
-def headline(report: dict) -> str:
-    t = report["tells"]
-    if t["bets"] < 5:
-        return "Play a few more hands so the Shark can study you."
-    if t["cost_bb"] <= 0.5:
-        return f"Poker face holding: the Shark has read {t['bets']} of your bets and gained nothing."
-    worst = max(t["coefficients"].items(), key=lambda kv: abs(kv[1]), default=(None, 0))[0]
-    names = {"hr_z": "heart rate", "hr_slope": "rising heart rate", "br_z": "breathing",
-             "decision_s": "how long you think"}
-    tell = names.get(worst, "your vitals")
-    return (f"Your body leaked {t['cost_bb']:g} big blinds over {report['hands']} hands "
-            f"({t['cost_bb_per_100']:g} bb/100). Biggest tell: {tell}.")
+def headline(r: dict) -> str:
+    if r["answers"] < 4:
+        return "Answer a few more questions so the lie detector can learn you."
+    if not r["days_as_mafia"]:
+        return f"The detector has studied {r['answers']} of your answers. Play a game as the mafia to see what it catches."
+    worst = max(r["coefficients"].items(), key=lambda kv: kv[1], default=(None, 0))[0] or "your face and voice"
+    caught, blind = r["caught_by_reader"], r["caught_by_blind"]
+    if caught <= blind:
+        return f"Poker face holding: your tells didn't get you caught any more often ({caught} vs {blind} days)."
+    return (f"Your body gave you away: as the mafia you were voted out on {caught} of {r['days_as_mafia']} days, "
+            f"versus {blind} if nobody could read you. Biggest tell: {worst}.")
