@@ -4,6 +4,10 @@ The file is 18 GB, but we only need 17 of its 511 landmarks, so it is read line 
 from Zenodo (or from a local copy) and never stored. Memory stays small; the run is limited by
 download speed. Standard library + numpy only.
 
+Progress is saved after every recording and dropped connections are retried, so if the run stops
+(sleep, Ctrl+C, no network) just run the same command again and it carries on from where it was.
+`--restart` throws the saved progress away.
+
     # whole dataset, streamed from Zenodo
     python research/extract_landmark_features.py
     # from a local copy, or check the column mapping on the probe sample first
@@ -17,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
+import http.client
 import json
 import re
 import sys
@@ -164,105 +168,225 @@ def participant_of(video: str, pattern: str | None) -> str:
 
 # ---- streaming ----------------------------------------------------------------------------------
 
-def open_source(source: str):
+OUT_COLUMNS = ["video", "participant", "label", *ALL_WINDOW_FEATURES, "frames", "frames_seen"]
+COUNTERS = ("frames_read", "frames_failing_mesh", "frames_failing_geometry")
+MAX_RETRIES = 30  # consecutive reconnects without progress before giving up
+
+
+def open_at(source: str, offset: int):
+    """Binary stream of `source` from byte `offset`, and the total size in bytes."""
     if source.startswith("http"):
-        req = urllib.request.Request(source, headers={"User-Agent": "tilt-oxhack-research/1.0"})
-        resp = urllib.request.urlopen(req, timeout=300)
-        total = int(resp.headers.get("Content-Length") or 0)
-        return io.TextIOWrapper(resp, encoding="utf-8", newline=""), total
+        headers = {"User-Agent": "tilt-oxhack-research/1.0"}
+        if offset:
+            headers["Range"] = f"bytes={offset}-"
+        resp = urllib.request.urlopen(urllib.request.Request(source, headers=headers), timeout=120)
+        if offset and resp.status != 206:
+            raise SystemExit(f"server ignored the Range request (status {resp.status}); cannot resume")
+        rng = resp.headers.get("Content-Range")  # "bytes start-end/total"
+        total = int(rng.rsplit("/", 1)[1]) if rng and "/" in rng else offset + int(resp.headers.get("Content-Length") or 0)
+        return resp, total
     p = Path(source)
-    return open(p, encoding="utf-8", newline=""), p.stat().st_size
+    f = open(p, "rb")
+    f.seek(offset)
+    return f, p.stat().st_size
+
+
+def parse_line(raw: bytes) -> list[str]:
+    return next(csv.reader([raw.decode("utf-8").rstrip("\r\n")]), [])
+
+
+class Recording:
+    """Everything kept about the recording being read; rows of one recording are contiguous."""
+
+    def __init__(self, name: str, label: int):
+        self.name, self.label = name, label
+        self.frames: list[dict] = []
+        self.seen = 0
+        self.counts = dict.fromkeys(COUNTERS, 0)
+        self.orientation: dict[str, int] = defaultdict(int)
+
+
+class Extractor:
+    def __init__(self, header: list[str], positional: str, participant_regex: str | None):
+        self.header = header
+        self.ids, self.cols, self.how = resolve_columns(header, positional)
+        coords = [i for i, h in enumerate(header) if h.strip()[-2:] in ("_X", "_Y", "_Z")]
+        self.face_cols = coords[:3 * N_FACE] if len(coords) >= 3 * N_FACE else None
+        self.mesh = load_canonical_mesh() if self.face_cols else None
+        self.participant_regex = participant_regex
+
+    def add(self, rec: Recording, row: list[str]) -> None:
+        rec.counts["frames_read"] += 1
+        if int(float(row[self.ids["Class"]])) != rec.label:
+            raise SystemExit(f"recording {rec.name} has more than one label")
+        try:
+            pts = {lm: (float(row[cx]), float(row[cy])) for lm, (cx, cy) in self.cols.items()}
+        except ValueError:
+            return  # face not detected in this frame (empty cells)
+        if any(v != v for xy in pts.values() for v in xy):
+            return
+        rec.seen += 1
+        if self.face_cols:
+            try:
+                face = np.array([float(row[c]) for c in self.face_cols]).reshape(N_FACE, 3)
+            except ValueError:
+                return
+            if not mesh_error(face, self.mesh) <= MAX_MESH_ERROR:
+                rec.counts["frames_failing_mesh"] += 1
+                return
+        pts, turn = upright(pts)
+        rec.orientation[turn] += 1
+        if not geometry_ok(pts):
+            rec.counts["frames_failing_geometry"] += 1
+            return
+        rec.frames.append(frame_primitives(pts))
+
+    def output_row(self, rec: Recording) -> list:
+        feats = window_features(rec.frames)
+        return [rec.name, participant_of(rec.name, self.participant_regex), rec.label,
+                *[feats[k] for k in ALL_WINDOW_FEATURES], int(feats["frames"]), rec.seen]
 
 
 def run(source: str, out: Path, participant_regex: str | None, max_bytes: int | None, check: bool,
-        positional: str) -> dict:
-    stream, total = open_source(source)
-    reader = csv.reader(stream)
-    header = next(reader)
-    ids, cols, how = resolve_columns(header, positional)
-    print(f"{len(header)} columns; landmark columns resolved {how}")
-    coords = [i for i, h in enumerate(header) if h.strip()[-2:] in ("_X", "_Y", "_Z")]
-    face_cols = coords[:3 * N_FACE] if len(coords) >= 3 * N_FACE else None
-    mesh = load_canonical_mesh() if face_cols else None
-    if face_cols is None:
+        positional: str, restart: bool = False) -> dict:
+    """Stream the file once. Unless checking or stopping early, progress is saved after every
+    recording (`<out>.partial.csv` plus `<out>.progress.json`), so a dropped connection, a sleeping
+    laptop or a Ctrl+C costs at most one recording: run the same command again to carry on.
+    """
+    persist = not check and not max_bytes
+    partial_csv, progress_json = out.with_suffix(".partial.csv"), out.with_suffix(".progress.json")
+    if persist:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    if restart:
+        partial_csv.unlink(missing_ok=True)
+        progress_json.unlink(missing_ok=True)
+
+    state = json.loads(progress_json.read_text()) if persist and progress_json.exists() else None
+    if state and state["source"] != source:
+        raise SystemExit(f"{progress_json} belongs to {state['source']}; pass --restart to start over")
+    if state is None:
+        stream, _ = open_at(source, 0)
+        first = stream.readline()
+        stream.close()
+        state = {"source": source, "header": parse_line(first), "offset": len(first), "recordings": 0,
+                 "counts": dict.fromkeys(COUNTERS, 0), "orientation": {}, "complete": False}
+    else:
+        print(f"resuming at byte {state['offset']:,} after {state['recordings']} recordings")
+    header = state["header"]
+    ex = Extractor(header, positional, participant_regex)
+    print(f"{len(header)} columns; landmark columns resolved {ex.how}")
+    if ex.face_cols is None:
         print("no full face mesh in this file; frames are not quality-checked")
 
-    frames: dict[str, list] = defaultdict(list)
-    label: dict[str, int] = {}
-    bad_geometry = bad_mesh = rows = 0
-    orientation: dict[str, int] = defaultdict(int)
-    frames_seen: dict[str, int] = defaultdict(int)
-    read_bytes = len(",".join(header))
-    t0 = last = time.time()
-    partial = False
-    for row in reader:
-        if not row:
-            continue
-        if len(row) != len(header):
-            break  # truncated final line of a partial download
-        rows += 1
-        read_bytes += sum(map(len, row)) + len(row)
-        video = row[ids["Video_Name"]]
-        lab = int(float(row[ids["Class"]]))
-        if label.setdefault(video, lab) != lab:
-            raise SystemExit(f"recording {video} has more than one label")
-        try:
-            pts = {lm: (float(row[cx]), float(row[cy])) for lm, (cx, cy) in cols.items()}
-        except ValueError:
-            continue  # face not detected in this frame (empty cells)
-        if any(v != v for xy in pts.values() for v in xy):
-            continue
-        frames_seen[video] += 1
-        if face_cols:
-            try:
-                face = np.array([float(row[c]) for c in face_cols]).reshape(N_FACE, 3)
-            except ValueError:
-                continue
-            if not mesh_error(face, mesh) <= MAX_MESH_ERROR:
-                bad_mesh += 1
-                continue
-        pts, turn = upright(pts)
-        orientation[turn] += 1
-        if not geometry_ok(pts):
-            bad_geometry += 1
-            continue
-        frames[video].append(frame_primitives(pts))
-        if time.time() - last > 15:
-            last = time.time()
-            rate = read_bytes / (last - t0) / 1e6
-            pct = f" {100 * read_bytes / total:.1f}%" if total else ""
-            print(f"  {read_bytes / 1e9:.2f} GB{pct}, {rows:,} frames, {len(label)} recordings, {rate:.1f} MB/s")
-        if max_bytes and read_bytes >= max_bytes:
-            partial = True
-            break
-    stream.close()
+    done: set[str] = set()
+    rows_out: list[list] = []  # only used when not persisting
+    if persist:
+        if partial_csv.exists():
+            with open(partial_csv, newline="") as f:
+                done = {r[0] for r in csv.reader(f) if r and r[0] != "video"}
+        else:
+            with open(partial_csv, "w", newline="") as f:
+                csv.writer(f).writerow(OUT_COLUMNS)
 
-    usable = rows - bad_mesh - bad_geometry
-    summary = {"source": source, "column_mapping": how, "frames_read": rows, "frames_failing_mesh": bad_mesh,
-               "max_mesh_error": MAX_MESH_ERROR, "frames_failing_geometry": bad_geometry,
-               "frame_orientation": dict(orientation), "recordings": len(label), "partial_read": partial,
-               "bytes_read": read_bytes}
+    def finish(rec: Recording, next_offset: int) -> None:
+        row = ex.output_row(rec)
+        for k in COUNTERS:
+            state["counts"][k] += rec.counts[k]
+        for k, v in rec.orientation.items():
+            state["orientation"][k] = state["orientation"].get(k, 0) + v
+        state["recordings"] += 1
+        state["offset"] = next_offset
+        done.add(rec.name)
+        if persist:
+            with open(partial_csv, "a", newline="") as f:
+                csv.writer(f).writerow(row)
+            tmp = progress_json.with_suffix(".tmp")
+            tmp.write_text(json.dumps(state))
+            tmp.replace(progress_json)
+        else:
+            rows_out.append(row)
+
+    partial = False
+    failures = 0
+    t0, start_offset, last = time.time(), state["offset"], 0.0
+    while not state["complete"] and not partial:
+        rec, pos = None, state["offset"]
+        try:
+            stream, total = open_at(source, pos)
+            while True:
+                raw = stream.readline()
+                if not raw:
+                    if total and pos < total:
+                        raise ConnectionError(f"stream ended early at byte {pos:,} of {total:,}")
+                    break
+                line_start, pos = pos, pos + len(raw)
+                row = parse_line(raw)
+                if not row:
+                    continue
+                if len(row) != len(header):
+                    if not raw.endswith(b"\n") and total and pos < total:
+                        raise ConnectionError("truncated line")
+                    break  # truncated final line of a partial file
+                video = row[ex.ids["Video_Name"]]
+                if rec is None or video != rec.name:
+                    if rec is not None:
+                        finish(rec, line_start)
+                        failures = 0
+                    if video in done:
+                        raise SystemExit(f"recording {video} appears twice; the file is not grouped by recording")
+                    rec = Recording(video, int(float(row[ex.ids["Class"]])))
+                ex.add(rec, row)
+                if time.time() - last > 15:
+                    last = time.time()
+                    rate = (pos - start_offset) / max(last - t0, 1e-9) / 1e6
+                    pct = f" {100 * pos / total:.1f}%" if total else ""
+                    print(f"  {pos / 1e9:.2f} GB{pct}, {state['recordings']} recordings done, {rate:.1f} MB/s",
+                          flush=True)
+                if max_bytes and pos >= max_bytes:
+                    partial = True
+                    break
+            stream.close()
+            if rec is not None:
+                finish(rec, pos)
+            state["complete"] = not partial
+        except (OSError, ConnectionError, http.client.HTTPException) as exc:  # URLError and timeouts are OSErrors
+            failures += 1
+            if failures > MAX_RETRIES:
+                raise SystemExit(f"giving up after {MAX_RETRIES} failed reconnects; run again to resume") from exc
+            wait = min(300, 5 * 2 ** min(failures, 6))
+            print(f"  connection lost ({exc!r}); resuming from byte {state['offset']:,} in {wait}s", flush=True)
+            time.sleep(wait)
+    if persist:
+        progress_json.write_text(json.dumps(state))
+
+    counts = state["counts"]
+    summary = {"source": source, "column_mapping": ex.how, **counts, "max_mesh_error": MAX_MESH_ERROR,
+               "frame_orientation": state["orientation"], "recordings": state["recordings"],
+               "partial_read": partial, "bytes_read": state["offset"]}
     print(json.dumps(summary, indent=2))
     if check:
         # Frames that pass the mesh check must also be the right way up and round; lost-face frames
         # were already set aside, so this tests the column mapping on its own.
-        ok = rows - bad_mesh > 0 and bad_geometry / max(rows - bad_mesh, 1) < 0.05
+        passed_mesh = counts["frames_read"] - counts["frames_failing_mesh"]
+        ok = passed_mesh > 0 and counts["frames_failing_geometry"] / max(passed_mesh, 1) < 0.05
         print("Column mapping looks right." if ok else "Column mapping looks WRONG: most frames fail the face-geometry check.")
-        sample = sorted(label)[:10]
-        print("Example video names:", sample)
+        print("Example video names:", sorted(done)[:10])
         return summary | {"mapping_ok": ok}
-    if usable <= 0:
-        raise SystemExit("no usable frames")
 
+    if persist:
+        with open(partial_csv, newline="") as f:
+            rows_out = [r for r in csv.reader(f) if r and r[0] != "video"]
+    if not rows_out:
+        raise SystemExit("no recordings read")
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["video", "participant", "label", *ALL_WINDOW_FEATURES, "frames", "frames_seen"])
-        for video in sorted(label):
-            feats = window_features(frames.get(video, []))
-            w.writerow([video, participant_of(video, participant_regex), label[video],
-                        *[feats[k] for k in ALL_WINDOW_FEATURES], int(feats["frames"]), frames_seen[video]])
+        w.writerow(OUT_COLUMNS)
+        w.writerows(sorted(rows_out, key=lambda r: r[0]))
     (out.with_suffix(".meta.json")).write_text(json.dumps(summary, indent=2))
+    if persist:
+        partial_csv.unlink()
+        progress_json.unlink()
     print(f"wrote {out}" + ("  (PARTIAL: biased subset, do not report as results)" if partial else ""))
     return summary
 
@@ -276,8 +400,10 @@ def main() -> int:
     ap.add_argument("--max-bytes", type=float, default=None, help="stop early (testing only)")
     ap.add_argument("--check", action="store_true", help="only verify the column mapping on the source")
     ap.add_argument("--positional", choices=["auto", "force", "never"], default="auto")
+    ap.add_argument("--restart", action="store_true", help="discard saved progress and start from the beginning")
     a = ap.parse_args()
-    run(a.source, a.out, a.participant_regex, int(a.max_bytes) if a.max_bytes else None, a.check, a.positional)
+    run(a.source, a.out, a.participant_regex, int(a.max_bytes) if a.max_bytes else None, a.check, a.positional,
+        a.restart)
     return 0
 
 
