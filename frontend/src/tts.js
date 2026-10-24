@@ -18,26 +18,52 @@ export function audioContext() {
 
 export function unlockAudio() {
   audioContext().resume()
-  if ('speechSynthesis' in window) window.speechSynthesis.getVoices()
+  if ('speechSynthesis' in window) {
+    // Chrome can carry a stuck speech queue over from a reload; clearing it inside a click fixes that.
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.getVoices()
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(''))
+  }
 }
 
 let status = null
+let failures = 0
+let humanOff = false     // ElevenLabs kept failing, so this session uses browser voices
+let voiceError = null
 async function backendHasVoices() {
   if (status === null) {
     status = await fetch('/api/health').then((r) => r.json()).catch(() => ({}))
+    voiceError = status.voice_error ?? null
   }
-  return Boolean(status.elevenlabs)
+  return Boolean(status.elevenlabs) && !humanOff
+}
+
+function noteFailure(reason) {
+  voiceError = reason || voiceError || 'ElevenLabs gave no audio'
+  failures += 1
+  if (failures >= 2) humanOff = true
+  console.warn('Human voice failed, using the browser voice instead:', voiceError)
 }
 
 const cache = new Map()
 function fetchAudio(speaker, text) {
   const key = `${speaker}|${text}`
   if (!cache.has(key)) {
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), 15000)
     cache.set(key, fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, speaker }),
-    }).then((res) => (res.status === 200 ? res.blob() : null)).catch(() => null))
+      signal: abort.signal,
+    }).then((res) => {
+      if (res.status === 200) return res.blob()
+      noteFailure(res.headers.get('X-TTS-Error'))
+      return null
+    }).catch(() => {
+      noteFailure('ElevenLabs took too long to answer')
+      return null
+    }).finally(() => clearTimeout(timer)))
   }
   return cache.get(key)
 }
@@ -85,34 +111,58 @@ export function resumeSpeech() {
   window.speechSynthesis?.resume()
 }
 
+// Plays straight to the speakers (not through Web Audio, so a suspended audio context or an odd
+// output device can't silence it). The talking animation taps a copy of the stream.
 async function playMp3(blob, onLevel) {
   const audio = new Audio(URL.createObjectURL(blob))
   current = audio
-  const c = audioContext()
-  const src = c.createMediaElementSource(audio)
-  const an = c.createAnalyser()
-  an.fftSize = 512
-  src.connect(an)
-  an.connect(c.destination)
-  const buf = new Float32Array(an.fftSize)
-  let raf
-  const meter = () => {
-    an.getFloatTimeDomainData(buf)
-    let rms = 0
-    for (let i = 0; i < buf.length; i++) rms += buf[i] ** 2
-    onLevel?.(Math.min(1, Math.sqrt(rms / buf.length) * 5))
-    raf = requestAnimationFrame(meter)
+  try {
+    await audio.play()
+  } catch (e) {
+    current = null
+    noteFailure(`The browser blocked audio playback (${e.name})`)
+    return false
   }
-  await c.resume()
-  await audio.play()
+  failures = 0
+  let raf
+  let meter = null
+  try {
+    const stream = audio.captureStream?.() ?? audio.mozCaptureStream?.()
+    if (stream?.getAudioTracks().length) {
+      const c = audioContext()
+      const an = c.createAnalyser()
+      an.fftSize = 512
+      c.createMediaStreamSource(stream).connect(an)
+      const buf = new Float32Array(an.fftSize)
+      meter = () => {
+        an.getFloatTimeDomainData(buf)
+        let rms = 0
+        for (let i = 0; i < buf.length; i++) rms += buf[i] ** 2
+        onLevel?.(Math.min(1, Math.sqrt(rms / buf.length) * 5))
+        raf = requestAnimationFrame(meter)
+      }
+    }
+  } catch {
+    meter = null
+  }
+  if (!meter) {
+    let level = 0
+    meter = () => {
+      level = audio.paused ? 0 : Math.max(0, level * 0.7 + Math.random() * 0.35)
+      onLevel?.(level)
+      raf = setTimeout(meter, 60)
+    }
+  }
   meter()
   await new Promise((r) => {
     audio.onended = r
     audio.onerror = r
   })
   cancelAnimationFrame(raf)
+  clearTimeout(raf)
   current = null
   onLevel?.(0)
+  return true
 }
 
 function browserSpeak(speaker, text, onLevel) {
@@ -147,6 +197,7 @@ function browserSpeak(speaker, text, onLevel) {
     }
     u.onend = done
     u.onerror = done
+    if (window.speechSynthesis.speaking && !paused) window.speechSynthesis.cancel()
     window.speechSynthesis.speak(u)
   })
 }
@@ -156,11 +207,16 @@ export async function say(speaker, text, onLevel) {
   if (await backendHasVoices()) {
     const blob = await fetchAudio(speaker, text)
     cache.delete(`${speaker}|${text}`)
-    if (blob) return playMp3(blob, onLevel)
+    if (blob && (await playMp3(blob, onLevel))) return
   }
   return browserSpeak(speaker, text, onLevel)
 }
 
 export function usingHumanVoices() {
-  return Boolean(status?.elevenlabs)
+  return Boolean(status?.elevenlabs) && !humanOff
+}
+
+// For the sidebar: which voices are playing, and why ElevenLabs isn't if it isn't.
+export function voiceStatus() {
+  return { checked: status !== null, human: usingHumanVoices(), keySet: Boolean(status?.elevenlabs), error: voiceError }
 }

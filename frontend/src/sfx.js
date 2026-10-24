@@ -76,3 +76,22 @@ export function playVerdict(won) {
   const notes = won ? [262, 330, 392, 523] : [294, 277, 262, 208]
   notes.forEach((f, i) => tone('triangle', f, t + i * 0.18, { attack: 0.01, hold: 0.12, release: 0.5, peak: 0.15 }))
 }
+
+// A phone ringing out (UK double ring), then little blips as people join the call.
+export function playRing() {
+  if (FAST) return
+  const c = audioContext()
+  const t = c.currentTime + 0.05
+  for (const start of [0, 0.6, 2.0, 2.6]) {
+    tone('sine', 400, t + start, { attack: 0.02, hold: 0.36, release: 0.05, peak: 0.08 })
+    tone('sine', 450, t + start, { attack: 0.02, hold: 0.36, release: 0.05, peak: 0.08 })
+  }
+}
+
+export function playJoin(i = 0) {
+  if (FAST) return
+  const c = audioContext()
+  const t = c.currentTime + 0.02
+  tone('triangle', 520 + i * 60, t, { attack: 0.01, hold: 0.05, release: 0.18, peak: 0.12 })
+  tone('triangle', 780 + i * 60, t + 0.08, { attack: 0.01, hold: 0.05, release: 0.2, peak: 0.1 })
+}

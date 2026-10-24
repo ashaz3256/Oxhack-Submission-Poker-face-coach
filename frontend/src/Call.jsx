@@ -10,8 +10,8 @@ import { FaceScanner } from './sensors/face.js'
 import { PresageRecorder } from './sensors/presage.js'
 import { listen, sttSupported } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
-import { playDeath, playIntro, playNight, playVerdict } from './sfx.js'
-import { pauseSpeech, prefetch, resumeSpeech, say, usingHumanVoices } from './tts.js'
+import { playDeath, playIntro, playJoin, playNight, playRing, playVerdict } from './sfx.js'
+import { pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
 const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓' }
@@ -86,6 +86,8 @@ export default function Call({ dev }) {
   const [verdict, setVerdict] = useState(null)
   const [drawerTab, setDrawerTab] = useState('breakdown')
   const [review, setReview] = useState(null)
+  const [joined, setJoined] = useState([])
+  const [connecting, setConnecting] = useState(true)
   const presage = useRef(null)
   const pausedRef = useRef(false)
   const waiters = useRef([])
@@ -128,7 +130,10 @@ export default function Call({ dev }) {
 
   useEffect(() => {
     let cancelled = false
-    run().catch((e) => setError(e.message))
+    run().catch((e) => {
+      setConnecting(false)
+      setError(e.message)
+    })
     return () => {
       cancelled = true
       face.current?.stop()
@@ -246,6 +251,17 @@ export default function Call({ dev }) {
       presage.current = new PresageRecorder(stream, sid.current)
       presage.current.start()
 
+      // Ring out, then the five AIs join the call one by one.
+      playRing()
+      await sleep(FAST ? 50 : 2200)
+      for (const [i, name] of BOTS.entries()) {
+        setJoined((j) => [...j, name])
+        playJoin(i)
+        await sleep(FAST ? 20 : 420)
+      }
+      await sleep(FAST ? 20 : 700)
+      setConnecting(false)
+
       prefetch(PRACTICE.map((q) => ({ speaker: 'Narrator', text: q.text })))
       let last = null
       for (const [i, q] of PRACTICE.entries()) {
@@ -294,6 +310,7 @@ export default function Call({ dev }) {
     }
   }, [dev])
 
+  const voice_ = voiceStatus()
   const players = game?.players ?? [{ name: 'You', alive: true }, ...BOTS.map((name) => ({ name, alive: true }))]
   const you = players.find((p) => p.name === 'You')
   const p = read?.p_lie
@@ -324,7 +341,7 @@ export default function Call({ dev }) {
             const talking = speaking.speaker === pl.name
             const pickable = pl.alive && (listening?.kind === 'vote' || listening?.kind === 'kill')
             return (
-              <div key={pl.name} className={`tile bot ${talking ? 'talking' : ''} ${pl.alive ? '' : 'dead'} ${pickable ? 'pickable' : ''}`}
+              <div key={pl.name} className={`tile bot ${talking ? 'talking' : ''} ${pl.alive ? '' : 'dead'} ${pickable ? 'pickable' : ''} ${joined.includes(pl.name) ? 'in' : 'out'}`}
                 style={{ '--lvl': talking ? speaking.level : 0 }}
                 onClick={pickable ? () => choose(listening.kind === 'vote' ? `I vote ${pl.name}` : pl.name) : undefined}>
                 {pickable && <div className="pick-hint">{listening.kind === 'vote' ? 'Vote' : 'Kill'}</div>}
@@ -374,8 +391,9 @@ export default function Call({ dev }) {
               Presage {live.presage.status === 'ok' ? '✓' : live.presage.status === 'error' ? '✗' : '…'}
             </span>
           )}
-          <span className={usingHumanVoices() ? 'ok' : 'bad'}>{usingHumanVoices() ? 'Human voices' : 'Browser voices'}</span>
+          <span className={voice_.human ? 'ok' : 'bad'} title={voice_.error ?? ''}>{!voice_.checked ? 'Voices …' : voice_.human ? 'Human voices ✓' : 'Browser voices'}</span>
         </div>
+        {!voice_.human && voice_.keySet && voice_.error && <p className="voice-warn">Human voices off: {voice_.error}</p>}
         <h4>Face</h4>
         <Meter label="Blinking" value={live.face.blink} />
         <Meter label="Brows up" value={live.face.brow_raise} max={0.6} />
@@ -405,6 +423,15 @@ export default function Call({ dev }) {
               {(practice.result.p_lie > 0.5) === practice.lie ? '✓ read you right' : '✗ fooled it'}
             </div>
           )}
+        </div>
+      )}
+      {connecting && (
+        <div className="connecting">
+          <div className="ring-pulse"><span>📞</span></div>
+          <div className="connecting-text">{joined.length ? 'Players joining…' : status ?? 'Calling the town…'}</div>
+          <div className="joins">
+            {joined.map((n) => <div key={n} className="join-toast">{FACES[n]} <b>{n}</b> joined the call</div>)}
+          </div>
         </div>
       )}
       {night && !death && <div className="night-veil"><div className="night-moon" /></div>}

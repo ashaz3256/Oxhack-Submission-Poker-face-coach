@@ -59,7 +59,7 @@ def _step(s: MafiaSession, fn) -> dict:
 def health() -> dict:
     import os
 
-    return {"ok": True, "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")),
+    return {"ok": True, "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")), "voice_error": coach.last_error(),
             "gemini": bool(os.environ.get("GEMINI_API_KEY")), "presage": bool(presage.api_key())}
 
 
@@ -141,5 +141,13 @@ def demo(games: int = 15, leakiness: float = 1.0) -> dict:
 def tts(body: Speech) -> Response:
     audio = coach.speak(body.text, body.speaker)
     if audio is None:
-        return Response(status_code=204)
+        reason = (coach.last_error() or "no voice").encode("ascii", "replace").decode()[:200]
+        return Response(status_code=204, headers={"X-TTS-Error": reason})
     return Response(content=audio, media_type="audio/mpeg")
+
+
+@app.get("/api/voice-check")
+def voice_check() -> dict:
+    """Open this in a browser to see whether ElevenLabs works with your key, and if not, why."""
+    audio = coach.speak("Testing, one, two.", "Narrator")
+    return {"ok": audio is not None, "bytes": len(audio or b""), "error": coach.last_error()}

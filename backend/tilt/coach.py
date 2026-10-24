@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+import urllib.error
 import urllib.request
 
 from . import gemini
@@ -32,17 +35,50 @@ def _post_json(url: str, body: dict, headers: dict, timeout: int = 30) -> bytes:
         return resp.read()
 
 
+# ElevenLabs' free plan allows two requests at once; more get a 429, so queue them here.
+_slots = threading.BoundedSemaphore(2)
+_last_error: str | None = None
+
+
+def last_error() -> str | None:
+    return _last_error
+
+
+def _explain(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            detail = json.loads(exc.read()).get("detail")
+            msg = detail.get("message") or detail.get("status") if isinstance(detail, dict) else detail
+        except Exception:
+            msg = exc.reason
+        return f"ElevenLabs said {exc.code}: {msg}"
+    return f"Couldn't reach ElevenLabs ({exc})"
+
+
 def speak(text: str, speaker: str) -> bytes | None:
     """MP3 bytes from ElevenLabs, or None (the browser then uses its own voices)."""
+    global _last_error
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
+        _last_error = "No ELEVENLABS_API_KEY in backend/.env"
         return None
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_for(speaker)}"
-    try:
-        body = {"text": text, "model_id": TTS_MODEL, "voice_settings": VOICE_SETTINGS}
-        return _post_json(url, body, {"xi-api-key": key, "Accept": "audio/mpeg"})
-    except Exception:
-        return None
+    body = {"text": text, "model_id": TTS_MODEL, "voice_settings": VOICE_SETTINGS}
+    with _slots:
+        for attempt in range(2):
+            try:
+                audio = _post_json(url, body, {"xi-api-key": key, "Accept": "audio/mpeg"}, timeout=20)
+                _last_error = None
+                return audio
+            except urllib.error.HTTPError as exc:
+                _last_error = _explain(exc)
+                if exc.code != 429 or attempt:
+                    return None
+                time.sleep(1.0)
+            except Exception as exc:
+                _last_error = _explain(exc)
+                return None
+    return None
 
 
 def review(report: dict, summary: str) -> dict:

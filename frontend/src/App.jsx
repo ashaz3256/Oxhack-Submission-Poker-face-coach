@@ -1,16 +1,21 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { api } from './api.js'
 import Call from './Call.jsx'
 import Report from './Report.jsx'
+import Splash from './Splash.jsx'
 import { sttSupported } from './sensors/stt.js'
 import { unlockAudio } from './tts.js'
 
-const dev = new URLSearchParams(window.location.search).has('dev')
+const params = new URLSearchParams(window.location.search)
+const dev = params.has('dev')
+const skipSplash = params.has('fast')
 
 export default function App() {
   const [screen, setScreen] = useState('lobby')
   const [demoId, setDemoId] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [splash, setSplash] = useState(!skipSplash)
+  const endSplash = useCallback(() => setSplash(false), [])
 
   const join = () => {
     unlockAudio() // browsers only allow sound and mic after one click
@@ -37,7 +42,8 @@ export default function App() {
     )
   }
   return (
-    <div className="lobby-scene">
+    <div className={`lobby-scene ${splash ? '' : 'revealed'}`}>
+      {splash && <Splash onDone={endSplash} />}
       <div className="intro-stars" />
       <div className="lobby-moon" />
       <div className="intro-fog" />
