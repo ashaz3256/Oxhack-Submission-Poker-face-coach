@@ -1,0 +1,57 @@
+"""Small online models: the Shark's tell reader and the tilt (bad decision) predictor."""
+from __future__ import annotations
+
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+MIN_PER_CLASS = 3
+
+
+class OnlineLogit:
+    """Logistic regression refit on every new label; falls back to a smoothed base rate."""
+
+    def __init__(self, feature_names: list[str], prior_rate: float = 0.3, prior_weight: float = 10.0):
+        self.feature_names = feature_names
+        self.prior_rate = prior_rate
+        self.prior_weight = prior_weight
+        self.X: list[list[float]] = []
+        self.y: list[int] = []
+        self._pipe = None
+
+    def base_rate(self) -> float:
+        return (sum(self.y) + self.prior_rate * self.prior_weight) / (len(self.y) + self.prior_weight)
+
+    @property
+    def ready(self) -> bool:
+        positives = sum(self.y)
+        return positives >= MIN_PER_CLASS and len(self.y) - positives >= MIN_PER_CLASS
+
+    def add(self, x: list[float], label: bool) -> None:
+        self.X.append(x)
+        self.y.append(int(label))
+        if self.feature_names and self.ready:
+            self._pipe = make_pipeline(StandardScaler(), LogisticRegression(C=0.5))
+            self._pipe.fit(np.array(self.X), np.array(self.y))
+
+    def predict(self, x: list[float]) -> float:
+        if self._pipe is None:
+            return self.base_rate()
+        p = float(self._pipe.predict_proba(np.array([x]))[0, 1])
+        # Shrink toward the base rate while the model has little data.
+        w = len(self.y) / (len(self.y) + self.prior_weight)
+        return w * p + (1 - w) * self.base_rate()
+
+    def coefficients(self) -> dict[str, float]:
+        if self._pipe is None:
+            return {}
+        coef = self._pipe[-1].coef_[0]
+        return {n: round(float(c), 3) for n, c in zip(self.feature_names, coef)}
+
+
+def safe_auc(y: list[int], p: list[float]) -> float | None:
+    if len(set(y)) < 2:
+        return None
+    return round(float(roc_auc_score(y, p)), 3)
