@@ -92,9 +92,9 @@ export default function Call({ dev }) {
         transcript = await listen({ ...LISTEN[kind], voice: voice.current, onInterim: (t) => setListening({ kind, interim: t }) })
       }
       setListening(null)
-      if (!measure) return { transcript, raw: {} }
+      if (!measure) return { transcript, raw: {}, faceFrames: null }
       const raw = { ...(voice.current?.endTurn(transcript) ?? {}), ...(face.current?.endTurn() ?? {}) }
-      return { transcript, raw }
+      return { transcript, raw, faceFrames: face.current?.lastFrames ?? null }
     }
 
     async function speakLines(lines, state) {
@@ -134,8 +134,8 @@ export default function Call({ dev }) {
 
       for (const prompt of CALIBRATION) {
         await speakLines([{ speaker: 'Narrator', text: prompt }], {})
-        const { transcript, raw } = await hear('calibrate')
-        await api.calibrate(sid.current, transcript, raw)
+        const { transcript, raw, faceFrames } = await hear('calibrate')
+        await api.calibrate(sid.current, transcript, raw, faceFrames)
       }
       await speakLines([{ speaker: 'Narrator', text: "Got it. Let's play." }], {})
 
@@ -154,9 +154,9 @@ export default function Call({ dev }) {
           if (review?.text) await speakLines([{ speaker: 'Narrator', text: review.text }], state)
           await speakLines([{ speaker: 'Narrator', text: "Say 'play again' when you're ready." }], state)
         }
-        const { transcript, raw } = await hear(awaiting.kind)
+        const { transcript, raw, faceFrames } = await hear(awaiting.kind)
         if (awaiting.kind === 'again') setShowReport(false)
-        state = await api.speak(sid.current, transcript, raw)
+        state = await api.speak(sid.current, transcript, raw, faceFrames)
       }
     }
   }, [dev])

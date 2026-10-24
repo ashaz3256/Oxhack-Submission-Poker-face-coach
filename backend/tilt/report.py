@@ -47,6 +47,7 @@ def report(s: MafiaSession) -> dict:
         "votes_on_you_blind": round(float(np.mean([v.votes_on_you_blind for v in as_mafia])), 2) if as_mafia else None,
         "caught_by_reader": sum(v.out_reader for v in as_mafia),
         "caught_by_blind": sum(v.out_blind for v in as_mafia),
+        "face_model": s.face.status(),
         "timeline": [{"i": i, "p_lie": u.p_lie, "lie": bool(u.is_lie), "text": u.transcript, "cues": u.cues,
                       "game": u.game, "day": u.day} for i, u in enumerate(answers, start=1)],
     }

@@ -23,7 +23,8 @@ import uuid
 from dataclasses import dataclass, field
 
 from . import dialogue
-from .cues import LIE_FEATURES, Baseline, describe, feature_dict
+from .cues import FACE_SCORE, LIE_FEATURES, Baseline, describe, feature_dict
+from .face_model import FaceScorer
 from .language import find_names, last_name, parse_number, wants_again
 from .models import OnlineLogit
 
@@ -101,6 +102,8 @@ class MafiaSession:
         self.baseline = Baseline()
         self.lie_model = OnlineLogit(LIE_FEATURES, prior_rate=0.4)
         self.lie_rate = OnlineLogit([], prior_rate=0.4)
+        self.face = FaceScorer()
+        self.face_frames: list[list[float]] | None = None  # this turn's per-frame face primitives, set by the API
         self.utterances: list[Utterance] = []
         self.votes: list[DayVote] = []
         self.games: list[Game] = []
@@ -136,6 +139,7 @@ class MafiaSession:
         """A relaxed, honest answer before the game: your baseline, and a first 'truth' example."""
         self.baseline.add(raw)
         f = feature_dict(self.baseline, raw, transcript)
+        f[FACE_SCORE], _ = self.face.score(self._take_face_frames())
         u = Utterance(game=0, day=0, t=self.clock(), kind="calibration", question="Tell us about your day.",
                       transcript=transcript, role="none", raw=raw, features=f, is_lie=False)
         self.utterances.append(u)
@@ -259,10 +263,15 @@ class MafiaSession:
             self._say(NARRATOR, "Time to vote. Say the name of the player you want eliminated.")
             self._await("vote", "Say a name: " + ", ".join(game.living(exclude=YOU)))
 
+    def _take_face_frames(self) -> list[list[float]] | None:
+        frames, self.face_frames = self.face_frames, None
+        return frames
+
     def _analyse(self, game: Game, question: str, transcript: str, raw: dict) -> dict:
         f = feature_dict(self.baseline, raw, transcript)
+        f[FACE_SCORE], _ = self.face.score(self._take_face_frames())
         x = [f[k] for k in LIE_FEATURES]
-        p = self.lie_model.predict(x)
+        p = self.lie_model.predict(x, prior_offset=f[FACE_SCORE])
         base = self.lie_rate.base_rate()
         contrib = self.lie_model.contributions(x)
         if contrib:
