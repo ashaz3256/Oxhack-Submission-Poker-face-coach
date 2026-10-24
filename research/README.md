@@ -92,11 +92,11 @@ the numbers test the reasoning, not how well real people can be read.**
 
 | Simulated player | Caught as mafia: Reader | Blind | Difference (95% CI) | Innocent voted out: Reader | Blind | Brier: Reader | Blind | Guessing |
 |---|---|---|---|---|---|---|---|---|
-| Placebo (no tells at all) | 20% | 23% | -3 pts [-7, +0] | 18% | 20% | 0.174 | 0.175 | 0.172 |
-| Leakiness 0.0 | 26% | 19% | +7 pts [+0, +13] | 11% | 16% | 0.167 | 0.172 | 0.172 |
-| Leakiness 0.5 | 75% | 12% | +63 pts [+54, +72] | 4% | 10% | 0.147 | 0.171 | 0.170 |
-| Leakiness 1.0 | 90% | 10% | +80 pts [+65, +91] | 0% | 8% | 0.135 | 0.172 | 0.170 |
-| Leakiness 1.5 | 91% | 9% | +81 pts [+66, +93] | 0% | 8% | 0.132 | 0.171 | 0.169 |
+| Placebo (no tells at all) | 19% | 21% | -2 pts [-6, +1] | 20% | 20% | 0.174 | 0.173 | 0.172 |
+| Leakiness 0.0 | 33% | 20% | +12 pts [+5, +20] | 12% | 14% | 0.167 | 0.172 | 0.171 |
+| Leakiness 0.5 | 75% | 13% | +62 pts [+51, +72] | 3% | 10% | 0.142 | 0.169 | 0.170 |
+| Leakiness 1.0 | 94% | 11% | +83 pts [+72, +92] | 1% | 7% | 0.131 | 0.169 | 0.169 |
+| Leakiness 1.5 | 87% | 12% | +75 pts [+61, +88] | 0% | 7% | 0.132 | 0.170 | 0.169 |
 
 The placebo makes liars and truth-tellers identical in body and words: the Reader town must do
 no better than the Blind one, and it doesn't. At leakiness 0 the simulated liar's words still
@@ -106,18 +106,18 @@ Calibration of every villager's beliefs at every vote (leakiness 1):
 
 | Bots said | It was the mafia | Beliefs |
 |---|---|---|
-| 3% | 4% | 5,134 |
-| 15% | 19% | 3,581 |
-| 26% | 28% | 3,011 |
-| 42% | 35% | 1,380 |
-| 59% | 48% | 1,015 |
-| 84% | 83% | 728 |
+| 3% | 3% | 5,251 |
+| 15% | 18% | 3,437 |
+| 26% | 28% | 2,929 |
+| 42% | 36% | 1,378 |
+| 59% | 50% | 975 |
+| 85% | 83% | 745 |
 
-Before vs after (`research/compare_bots.py`, the game's real 50% deal): in the placebo the old
-bots voted out an innocent human 41% of the time against 10% for their blind version, so the old
-report would tell a perfect poker face that their body gave them away; the new town is 22% vs 20%.
-With a real tell (leakiness 1) both catch the mafia (99% old, 94% new) and the new town wins more
-games (the human won 36% against the old bots, 28% against the new).
+Before vs after (`research/compare_bots.py`, Ismail's bots on `main` vs this town, the game's real 50% deal):
+in the placebo the old bots voted out an innocent human 42% of the time against 11% for their blind
+version, so the old report would tell a perfect poker face that their body gave them away; the new
+town is 26% vs 23%. With a real tell (leakiness 1) both catch the mafia (99% old, 95% new) and the
+new town wins more games (the human won 38% against the old bots, 28% against the new).
 
 Known gaps: the bots assume fair dealing, but the game deals you the mafia half the time to
 collect lie data; the gut-feeling strength (`HUNCH`) and accusation model (`ACCUSE_HIT`) are

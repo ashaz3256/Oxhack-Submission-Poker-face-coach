@@ -11,12 +11,13 @@ Bonus prizes the project touches: ElevenLabs, Gemini, Tiger Data.
 
 ## Team split and rules
 
-- **Ismail** owns the game and UI (`main`) and is doing the **Presage** work. Don't touch Presage.
+- **Ismail** owns the game and UI (`main`) and the **Presage** work (already on `main`). Don't touch Presage.
 - **Arij** owns the data science (this branch).
 - Commits are authored as **Arij** (ashaz3256). No AI co-author lines.
 - **Never push without Arij saying so.** Never push to `main`; merge via pull request.
 - Pull `main` and rebase before building on it; Ismail pushes often.
-- Run tests from `backend/`: `cd backend && python -m pytest -q` (29 pass).
+- Run tests from `backend/`: `cd backend && python -m pytest -q` (31 pass).
+- This branch is rebased on `main` at `0e1bfdc` (Ismail's Presage / death scenes / breakdown push).
 
 ## What this branch adds (on top of Ismail's game)
 
@@ -34,8 +35,8 @@ Bonus prizes the project touches: ElevenLabs, Gemini, Tiger Data.
    Bots hold P(mafia) per player, update with Bayes' rule, vote to maximise P(mafia eliminated),
    and trust the lie detector only as much as its out-of-sample AUC on this player has earned.
    Results in `research/README.md` and `research/results/`. Headline: a placebo test showed the
-   **old** bots framed innocent players on pure noise (41% vs 10% blind); the new town passes
-   (22% vs 20%). Beliefs are well calibrated. All of this is on **simulated** players.
+   **old** bots framed innocent players on pure noise (42% vs 11% blind); the new town passes
+   (26% vs 23%). Beliefs are well calibrated. All of this is on **simulated** players.
 
 ## Open tasks
 
