@@ -50,6 +50,9 @@ export default function Report({ sessionId, refreshKey }) {
         <div className="tile"><b>{r.game_accuracy != null ? `${Math.round(r.game_accuracy * 100)}%` : '–'}</b><span>accuracy in the game (read before it learned)</span></div>
         <div className="tile"><b>{r.lie_auc ?? '–'}</b><span>lie-detection AUC (0.5 = coin flip)</span></div>
         <div className="tile"><b>{r.caught_by_reader} vs {r.caught_by_blind}</b><span>days caught as mafia: read vs unread</span></div>
+        {r.town?.as_mafia_reader != null && (
+          <div className="tile"><b>{Math.round(r.town.as_mafia_reader * 100)}% vs {Math.round(r.town.as_mafia_blind * 100)}%</b><span>town's odds you were the mafia when it voted, with vs without the detector</span></div>
+        )}
         <div className="tile"><b>{r.lies}/{r.answers}</b><span>answers that were lies</span></div>
         <div className="tile"><b>{r.mafia_wins}/{r.games_as_mafia}</b><span>games won as mafia</span></div>
       </div>

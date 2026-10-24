@@ -11,9 +11,11 @@ As the mafia, everything you say in the discussion serves a lie, so each answer 
 or more is labelled a lie when you are the mafia and the truth when you are not. The lie model
 reads your face, voice and words before it learns the label, so its accuracy is out-of-sample.
 
-The AI town hears your tells: each answer moves their suspicion of you by how far the model's
-lie read sits above your base rate. Every vote is also replayed with that read removed (a
-"blind" town, same dice), so the report can say how often your body got you caught.
+The AI town thinks in probabilities (beliefs.py): each villager bot holds P(mafia) for every
+player and updates it with Bayes' rule from the lie detector's reads, silences, accusations, kills
+and a weak daily gut feeling about the other bots, then votes to maximise the chance the mafia goes
+out. Every vote is also replayed by a "blind" town that never hears the lie detector (same dice),
+so the report can say how often your body got you caught.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from dataclasses import dataclass, field
 
 from . import dialogue
 from .cues import FACE_SCORE, describe
+from .beliefs import TownMind
 from .face_model import FaceScorer
 from .language import find_names, last_name, parse_number, wants_again
 from .liemodel import LieModel
@@ -33,10 +36,6 @@ YOU = "You"
 BOTS = ["Ava", "Ben", "Cleo", "Dev", "Eli"]
 PLAYERS = [YOU] + BOTS
 NARRATOR = "Narrator"
-READ_WEIGHT = 3.5
-ACCUSED_SUSPICION = 0.2
-SILENCE_SUSPICION = 0.3
-BOT_MAFIA_HINT = 0.3
 MIN_CLAIM_WORDS = 3
 QUESTIONS_PER_DAY = 2
 
@@ -68,6 +67,10 @@ class DayVote:
     votes_on_you_blind: int
     out_reader: bool
     out_blind: bool
+    p_you_reader: float | None = None     # town's average P(you are the mafia) when it voted
+    p_you_blind: float | None = None
+    p_catch_reader: float | None = None   # chance the votes eliminate the real mafia
+    p_catch_blind: float | None = None
 
 
 @dataclass
@@ -83,8 +86,7 @@ class Game:
     retries: int = 0
     winner: str | None = None
     victim: str | None = None
-    suspicion: dict[str, dict[str, float]] = field(default_factory=dict)
-    you_bump: float = 0.0     # how much of the town's suspicion of you came from your tells
+    mind: TownMind | None = None   # the AI town's beliefs (set once roles are dealt)
     log: list[dict] = field(default_factory=list)   # answers, votes and kills, for the breakdown
 
     @property
@@ -112,6 +114,7 @@ class MafiaSession:
         self.outbox: list[dict] = []
         self.last_read: dict | None = None
         self.presage = PresageVitals()
+        self.belief_log: list[dict] = []   # every villager bot's beliefs at each vote, for the report
 
     # ---- talking ------------------------------------------------------------------------------
     def _say(self, speaker: str, text: str, event: dict | None = None) -> None:
@@ -136,6 +139,12 @@ class MafiaSession:
                "human_is_called": "You (address them as 'you')"}
         if game.mafia and game.mafia != YOU:
             ctx["mafia_secret"] = f"{game.mafia} is the mafia and should deflect suspicion without revealing it"
+        if game.mind:
+            ctx["each_players_private_odds_that_someone_is_mafia_percent"] = {
+                b: {p: round(100 * v) for p, v in game.mind.posterior(b).items() if p != b}
+                for b in game.living(exclude=YOU)}
+            ctx["how_to_use_odds"] = ("Let each speaker's suspicions follow their own odds; the analyst may quote "
+                                      "a rough percentage. Never reveal the odds table itself.")
         return {**ctx, **(extra or {})}
 
     # ---- calibration --------------------------------------------------------------------------
@@ -172,7 +181,6 @@ class MafiaSession:
         if self.current and self.current.phase != "over":
             return self.current
         game = Game(number=len(self.games) + 1, alive={p: True for p in PLAYERS})
-        game.suspicion = {b: {p: self.rng.gauss(0, 0.3) for p in PLAYERS if p != b} for b in BOTS}
         self.games.append(game)
         self._say(NARRATOR, "Right. Six cards, face down. One of them's the mafia. Pick one. Say a number, or tap a card.",
                   event={"type": "intro", "game": game.number})
@@ -206,6 +214,7 @@ class MafiaSession:
         order = BOTS[:]
         self.rng.shuffle(order)
         game.cards = order[: n - 1] + [YOU] + order[n - 1:]
+        game.mind = TownMind(human=YOU, bots=list(BOTS), mafia=game.mafia, seed=self.rng.randrange(2**31))
         role = "the mafia. Lie your way to the end" if you_mafia else "a villager. Find the mafia before it finds you"
         self._say(NARRATOR, f"You drew card {n}. You are {role}.")
         self._start_day(game)
@@ -213,6 +222,7 @@ class MafiaSession:
     def _start_day(self, game: Game) -> None:
         game.phase = "talk"
         game.asked_today = 0
+        game.mind.observe_hunches()
         if game.day == 1:
             self._say(NARRATOR, "Day one. Everyone's got their card, and somebody here is lying. Go on then. Talk.")
         else:
@@ -237,7 +247,7 @@ class MafiaSession:
                 elif opening and i == 0 and game.day == 1:
                     lines.append({"speaker": s, "text": self.rng.choice(dialogue.OPENERS)})
                 else:
-                    target = max([p for p in game.living(exclude=s)], key=lambda p: game.suspicion[s][p])
+                    target = game.mind.top_suspect(s)
                     target = "you" if target == YOU else target
                     lines.append({"speaker": s, "text": self.rng.choice(dialogue.SUSPECT).format(x=target)})
             return lines
@@ -260,8 +270,7 @@ class MafiaSession:
         question = game.awaiting["prompt"]
         asker = game.awaiting["asker"]
         if not transcript:
-            for b in game.living(exclude=YOU):
-                game.suspicion[b][YOU] += SILENCE_SUSPICION
+            game.mind.observe_silence()
             self._say(asker, "Nothing to say? That's telling.")
             game.log.append({"type": "silent", "day": game.day, "question": question})
             read = None
@@ -269,9 +278,7 @@ class MafiaSession:
             self._say(YOU, transcript)
             read = self._analyse(game, question, transcript, raw)
             for name in find_names(transcript, game.living(exclude=YOU)):
-                for b in game.living(exclude=YOU):
-                    if b != name:
-                        game.suspicion[b][name] += ACCUSED_SUSPICION
+                game.mind.observe_accusation(name)
         game.asked_today += 1
         if game.asked_today < QUESTIONS_PER_DAY:
             others = [p for p in game.living(exclude=YOU) if p != asker] or game.living(exclude=YOU)
@@ -310,22 +317,21 @@ class MafiaSession:
         self.utterances.append(u)
         if is_lie is not None:
             self.model.add(raw, transcript, llm, is_lie)
-        bump = READ_WEIGHT * (p - base)
-        game.you_bump += bump
-        for b in game.living(exclude=YOU):
-            game.suspicion[b][YOU] += bump
+        scored = [(x.p_lie, int(x.is_lie)) for x in self.utterances[:-1] if x.is_lie is not None and x.p_lie is not None]
+        reliability = TownMind.detector_reliability(scored)
+        delta = game.mind.observe_read(p, base, reliability)
+        self.last_read_reliability = reliability
         game.log.append({"type": "answer", "day": game.day, "utterance": len(self.utterances) - 1,
-                         "bump": round(bump, 3), "rank": self._rank_of_you(game)})
+                         "bump": round(delta, 3), "rank": self._rank_of_you(game),
+                         "town_p_you": round(game.mind.p_human("reader"), 3)})
         self.last_read = {"p_lie": round(p, 3), "cues": u.cues, "top": top[0] if top else None,
                           "features": u.features, "labelled": is_lie}
         return self.last_read
 
     def _rank_of_you(self, game: Game) -> int:
         """1 if you are now the town's top suspect, 2 if second, and so on."""
-        bots = game.living(exclude=YOU)
-        avg = {p: sum(game.suspicion[b][p] for b in bots if b != p) / max(1, len([b for b in bots if b != p]))
-               for p in game.living()}
-        return sorted(avg, key=avg.get, reverse=True).index(YOU) + 1
+        town = game.mind.public("reader")
+        return sorted(town, key=town.get, reverse=True).index(YOU) + 1
 
     def _on_vote(self, game: Game, transcript: str, raw: dict) -> None:
         candidates = game.living(exclude=YOU)
@@ -339,18 +345,27 @@ class MafiaSession:
             return
         game.retries = 0
         target = target or self.rng.choice(candidates)
-        noise = {b: {p: self.rng.gauss(0, 0.25) for p in game.suspicion[b]} for b in candidates}
-        votes_reader = self._bot_votes(game, 0.0, noise)
-        votes_blind = self._bot_votes(game, -game.you_bump, noise)
+        mind = game.mind
+        votes_reader = mind.votes("reader", target)
+        votes_blind = mind.votes("blind", target)
         out = self._tally(votes_reader, target)
         out_blind = self._tally(votes_blind, target)
         self.votes.append(DayVote(game=game.number, day=game.day, you_mafia=game.you_mafia,
                                   votes_on_you_reader=sum(v == YOU for v in votes_reader.values()),
                                   votes_on_you_blind=sum(v == YOU for v in votes_blind.values()),
-                                  out_reader=out == YOU, out_blind=out_blind == YOU))
+                                  out_reader=out == YOU, out_blind=out_blind == YOU,
+                                  p_you_reader=round(mind.p_human("reader"), 3),
+                                  p_you_blind=round(mind.p_human("blind"), 3),
+                                  p_catch_reader=round(mind.mafia_caught_prob(votes_reader, target), 3),
+                                  p_catch_blind=round(mind.mafia_caught_prob(votes_blind, target), 3)))
+        self.belief_log.append({"game": game.number, "day": game.day, "mafia": game.mafia,
+                                "you_mafia": game.you_mafia,
+                                "beliefs": {b: mind.posterior(b, "reader") for b in mind.villagers()},
+                                "beliefs_blind": {b: mind.posterior(b, "blind") for b in mind.villagers()}})
         for b, v in votes_reader.items():
             self._say(b, f"I vote {'you' if v == YOU else v}.")
         game.alive[out] = False
+        mind.observe_elimination(out)
         role = "the mafia" if out == game.mafia else "a villager"
         who = "You are" if out == YOU else f"{out} is"
         game.log.append({"type": "vote", "day": game.day, "you_voted": target, "you_voted_mafia": target == game.mafia,
@@ -389,6 +404,7 @@ class MafiaSession:
         self.new_game()
 
     def _night(self, game: Game, victim: str) -> None:
+        game.mind.observe_night_kill(victim)
         game.alive[victim] = False
         game.victim = victim
         game.log.append({"type": "kill", "day": game.day, "victim": victim, "by_you": game.you_mafia})
@@ -398,45 +414,28 @@ class MafiaSession:
         game.day += 1
         self._start_day(game)
 
-    def _bot_votes(self, game: Game, you_shift: float, noise: dict) -> dict[str, str]:
-        votes = {}
-        for b in game.living(exclude=YOU):
-            candidates = game.living(exclude=b)
-
-            def score(p, b=b):
-                s = game.suspicion[b][p] + noise[b][p]
-                if p == YOU:
-                    s += you_shift
-                if p == game.mafia and b != game.mafia and p != YOU:
-                    s += BOT_MAFIA_HINT
-                return s
-            votes[b] = max(candidates, key=score)
-        return votes
-
-    def _tally(self, bot_votes: dict[str, str], your_vote: str) -> str:
+    def _tally(self, bot_votes: dict[str, str], your_vote: str | None) -> str:
         counts: dict[str, int] = {}
-        for v in list(bot_votes.values()) + [your_vote]:
+        for v in list(bot_votes.values()) + ([your_vote] if your_vote else []):
             counts[v] = counts.get(v, 0) + 1
         top = max(counts.values())
         tied = sorted(p for p, c in counts.items() if c == top)
         return tied[0] if len(tied) == 1 else random.Random(len(self.votes)).choice(tied)
 
     def _play_out(self, game: Game) -> None:
-        """You were voted out as a villager: the bots finish the game."""
+        """You were voted out as a villager: the bots finish the game, thinking the same way."""
+        mind = game.mind
         while game.phase != "over":
             victim = self.rng.choice(game.living(exclude=game.mafia))
+            mind.observe_night_kill(victim)
             game.alive[victim] = False
             self._say(NARRATOR, f"Night falls. {victim} is found dead.", event={"type": "death", "who": victim, "how": "night"})
             if self._check_over(game):
                 return
-            noise = {b: {p: self.rng.gauss(0, 0.25) for p in game.suspicion[b]} for b in game.living()}
-            counts: dict[str, int] = {}
-            for b in game.living():
-                choice = max(game.living(exclude=b), key=lambda p, b=b: game.suspicion[b][p] + noise[b][p]
-                             + (BOT_MAFIA_HINT if p == game.mafia and b != game.mafia else 0))
-                counts[choice] = counts.get(choice, 0) + 1
-            out = max(sorted(counts), key=counts.get)
+            mind.observe_hunches()
+            out = self._tally(mind.votes("reader", None), None)
             game.alive[out] = False
+            mind.observe_elimination(out)
             self._say(NARRATOR, f"The town eliminates {out}. {out} was {'the mafia' if out == game.mafia else 'a villager'}.")
             self._check_over(game)
 
@@ -475,7 +474,8 @@ class MafiaSession:
         return {
             "game": {"number": game.number, "day": game.day, "phase": game.phase,
                      "you_mafia": game.you_mafia if game.mafia else None, "players": players,
-                     "awaiting": game.awaiting, "winner": game.winner},
+                     "awaiting": game.awaiting, "winner": game.winner,
+                     "town_p_you": round(game.mind.p_human("reader"), 3) if game.mind else None},
             "lines": lines,
             "read": self.last_read,
             "record": {"games": len(finished), "wins": sum((g.winner == "mafia") == g.you_mafia for g in finished)},

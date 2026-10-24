@@ -323,6 +323,7 @@ export default function Call({ dev }) {
       let reviewed = null
       while (!cancelled) {
         setGame(state.game)
+        townRef.current = state.game?.town_p_you ?? null
         if (state.read) {
           setRead(state.read)
           lastRead.current = state.read
@@ -424,6 +425,12 @@ export default function Call({ dev }) {
           <div className="read-label">chance your last answer was a lie</div>
           <div className="chips">{(read?.cues ?? []).map((c) => <span key={c} className="chip">{c}</span>)}</div>
         </div>
+        {game?.town_p_you != null && (
+          <div className="read">
+            <div className="read-num">{Math.round(game.town_p_you * 100)}%</div>
+            <div className="read-label">the town's odds that you are the mafia (1 in {game.players.filter((x) => x.alive).length} would be a guess)</div>
+          </div>
+        )}
         <div className="sensors">
           <span className={live.face.face ? 'ok' : 'bad'}>Face {live.face.face ? '✓' : '✗'}</span>
           <span className={live.voice.pitch ? 'ok' : 'bad'}>Voice {live.voice.pitch ? '✓' : '…'}</span>

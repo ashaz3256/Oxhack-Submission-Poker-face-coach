@@ -65,3 +65,60 @@ says *demonstration mode*.
 - The authors report 58–69% accuracy for single modalities, so expect a modest effect, if any.
 - Training uses each person's mean over all 8 recordings (4 truth, 4 lie); the game's running mean
   is over however many answers it has seen, with an unknown truth/lie mix.
+
+# How the AI town reasons
+
+`backend/tilt/beliefs.py`. Each villager bot holds a probability that each player is the mafia and
+updates it with Bayes' rule from: the lie detector's read on your answer (an odds update,
+`logit(p) - logit(base)`, scaled by how much the detector has proven itself on you), silence,
+who you accuse, night kills, eliminations, and a weak daily gut feeling about other bots with a
+known accuracy (this replaced a hidden bonus that pointed villagers at the bot mafia).
+
+Votes are decisions: each villager casts the vote that maximises the probability that whoever is
+eliminated is the mafia, given everyone else's votes (best responses, plurality, random
+tie-breaks). The mafia bot votes to minimise its own risk. The Blind town is identical, shares
+every random draw, and never hears the lie detector.
+
+**Trust is earned.** A read's weight is the detector's out-of-sample AUC on this player so far,
+shrunk toward chance by n/(n+10), mapped to 0..1. Without this, a placebo test (below) showed the
+town framing innocent players on pure noise.
+
+## Evidence (simulated players, `research/simulate_town.py`)
+
+The simulated player (`backend/tilt/synthetic.py`) shifts face and voice when lying by
+`leakiness`. Dealing is fair here (1 in 6 that you are the mafia, as the bots assume). 60
+sessions × 10 games per row; intervals bootstrap over sessions. **These are simulated players:
+the numbers test the reasoning, not how well real people can be read.**
+
+| Simulated player | Caught as mafia: Reader | Blind | Difference (95% CI) | Innocent voted out: Reader | Blind | Brier: Reader | Blind | Guessing |
+|---|---|---|---|---|---|---|---|---|
+| Placebo (no tells at all) | 20% | 23% | -3 pts [-7, +0] | 18% | 20% | 0.174 | 0.175 | 0.172 |
+| Leakiness 0.0 | 26% | 19% | +7 pts [+0, +13] | 11% | 16% | 0.167 | 0.172 | 0.172 |
+| Leakiness 0.5 | 75% | 12% | +63 pts [+54, +72] | 4% | 10% | 0.147 | 0.171 | 0.170 |
+| Leakiness 1.0 | 90% | 10% | +80 pts [+65, +91] | 0% | 8% | 0.135 | 0.172 | 0.170 |
+| Leakiness 1.5 | 91% | 9% | +81 pts [+66, +93] | 0% | 8% | 0.132 | 0.171 | 0.169 |
+
+The placebo makes liars and truth-tellers identical in body and words: the Reader town must do
+no better than the Blind one, and it doesn't. At leakiness 0 the simulated liar's words still
+differ (more hedges and fillers), which is why the Reader still gains a little there.
+
+Calibration of every villager's beliefs at every vote (leakiness 1):
+
+| Bots said | It was the mafia | Beliefs |
+|---|---|---|
+| 3% | 4% | 5,134 |
+| 15% | 19% | 3,581 |
+| 26% | 28% | 3,011 |
+| 42% | 35% | 1,380 |
+| 59% | 48% | 1,015 |
+| 84% | 83% | 728 |
+
+Before vs after (`research/compare_bots.py`, the game's real 50% deal): in the placebo the old
+bots voted out an innocent human 41% of the time against 10% for their blind version, so the old
+report would tell a perfect poker face that their body gave them away; the new town is 22% vs 20%.
+With a real tell (leakiness 1) both catch the mafia (99% old, 94% new) and the new town wins more
+games (the human won 36% against the old bots, 28% against the new).
+
+Known gaps: the bots assume fair dealing, but the game deals you the mafia half the time to
+collect lie data; the gut-feeling strength (`HUNCH`) and accusation model (`ACCUSE_HIT`) are
+assumptions, and the 50–70% belief band is somewhat overconfident.

@@ -1,0 +1,317 @@
+{
+  "note": "simulated players (backend/tilt/synthetic.py), not real people",
+  "settings": {
+    "mafia_rate": 0.1667,
+    "same_words": false
+  },
+  "results": [
+    {
+      "leakiness": 0.0,
+      "mafia_rate": 0.1667,
+      "same_words": false,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 182,
+      "villager_days": 861,
+      "caught_reader": 0.25824175824175827,
+      "caught_reader_95ci": [
+        0.20224282470745764,
+        0.3202659516845412
+      ],
+      "caught_blind": 0.19230769230769232,
+      "caught_blind_95ci": [
+        0.12934520943668754,
+        0.26020939625850337
+      ],
+      "caught_difference": 0.06593406593406595,
+      "caught_difference_95ci": [
+        0.0,
+        0.1294148125571472
+      ],
+      "framed_reader": 0.11265969802555169,
+      "framed_blind": 0.156794425087108,
+      "framed_reader_95ci": [
+        0.08719406456040947,
+        0.140222517702807
+      ],
+      "town_win_rate": 0.5283333333333333,
+      "human_win_rate": 0.5383333333333333,
+      "brier_reader": 0.16661017795225347,
+      "brier_reader_95ci": [
+        0.16254515197336997,
+        0.17044211825197586
+      ],
+      "brier_blind": 0.17238487073779307,
+      "brier_uniform": 0.17173028650566957,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.066,
+          "actual_rate": 0.102,
+          "n": 2620
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.15,
+          "actual_rate": 0.185,
+          "n": 5719
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.26,
+          "actual_rate": 0.251,
+          "n": 4513
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.415,
+          "actual_rate": 0.339,
+          "n": 1528
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.576,
+          "actual_rate": 0.435,
+          "n": 828
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.775,
+          "actual_rate": 0.689,
+          "n": 196
+        }
+      ]
+    },
+    {
+      "leakiness": 0.5,
+      "mafia_rate": 0.1667,
+      "same_words": false,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 121,
+      "villager_days": 871,
+      "caught_reader": 0.7520661157024794,
+      "caught_reader_95ci": [
+        0.6754385964912281,
+        0.8333333333333334
+      ],
+      "caught_blind": 0.12396694214876033,
+      "caught_blind_95ci": [
+        0.06929839535677706,
+        0.18261078595317726
+      ],
+      "caught_difference": 0.628099173553719,
+      "caught_difference_95ci": [
+        0.5416666666666667,
+        0.7192982456140351
+      ],
+      "framed_reader": 0.03559127439724455,
+      "framed_blind": 0.09644087256027555,
+      "framed_reader_95ci": [
+        0.02367482513243869,
+        0.04858956733507472
+      ],
+      "town_win_rate": 0.5916666666666667,
+      "human_win_rate": 0.4533333333333333,
+      "brier_reader": 0.1466942400937054,
+      "brier_reader_95ci": [
+        0.14225757712588546,
+        0.15131098507472832
+      ],
+      "brier_blind": 0.17070533635015794,
+      "brier_uniform": 0.17008873689622037,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.05,
+          "actual_rate": 0.052,
+          "n": 3872
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.148,
+          "actual_rate": 0.168,
+          "n": 4712
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.262,
+          "actual_rate": 0.268,
+          "n": 3475
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.415,
+          "actual_rate": 0.388,
+          "n": 1483
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.587,
+          "actual_rate": 0.519,
+          "n": 969
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.793,
+          "actual_rate": 0.751,
+          "n": 402
+        }
+      ]
+    },
+    {
+      "leakiness": 1.0,
+      "mafia_rate": 0.1667,
+      "same_words": false,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 109,
+      "villager_days": 877,
+      "caught_reader": 0.8990825688073395,
+      "caught_reader_95ci": [
+        0.7983193277310925,
+        0.9797979797979798
+      ],
+      "caught_blind": 0.10091743119266056,
+      "caught_blind_95ci": [
+        0.03959425354300136,
+        0.1719169679752064
+      ],
+      "caught_difference": 0.798165137614679,
+      "caught_difference_95ci": [
+        0.6503963414634146,
+        0.9137931034482759
+      ],
+      "framed_reader": 0.0034207525655644243,
+      "framed_blind": 0.08323831242873432,
+      "framed_reader_95ci": [
+        0.0,
+        0.008055467908979546
+      ],
+      "town_win_rate": 0.615,
+      "human_win_rate": 0.46,
+      "brier_reader": 0.13521725386205957,
+      "brier_reader_95ci": [
+        0.12904639373258409,
+        0.14172407306578264
+      ],
+      "brier_blind": 0.17154755636272498,
+      "brier_uniform": 0.16970834442381352,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.034,
+          "actual_rate": 0.036,
+          "n": 5134
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.148,
+          "actual_rate": 0.189,
+          "n": 3581
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.263,
+          "actual_rate": 0.279,
+          "n": 3011
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.417,
+          "actual_rate": 0.354,
+          "n": 1380
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.589,
+          "actual_rate": 0.477,
+          "n": 1015
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.837,
+          "actual_rate": 0.831,
+          "n": 728
+        }
+      ]
+    },
+    {
+      "leakiness": 1.5,
+      "mafia_rate": 0.1667,
+      "same_words": false,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 106,
+      "villager_days": 877,
+      "caught_reader": 0.9056603773584906,
+      "caught_reader_95ci": [
+        0.8043284161490684,
+        0.981651376146789
+      ],
+      "caught_blind": 0.09433962264150944,
+      "caught_blind_95ci": [
+        0.03737452405676704,
+        0.16038578167115897
+      ],
+      "caught_difference": 0.8113207547169812,
+      "caught_difference_95ci": [
+        0.6583279914529915,
+        0.9279279279279279
+      ],
+      "framed_reader": 0.0011402508551881414,
+      "framed_blind": 0.07753705815279362,
+      "framed_reader_95ci": [
+        0.0,
+        0.003500583430571762
+      ],
+      "town_win_rate": 0.615,
+      "human_win_rate": 0.4633333333333333,
+      "brier_reader": 0.13181312821425997,
+      "brier_reader_95ci": [
+        0.12504437042680255,
+        0.13870965505185448
+      ],
+      "brier_blind": 0.17077991370475065,
+      "brier_uniform": 0.16937714641352114,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.026,
+          "actual_rate": 0.033,
+          "n": 5527
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.15,
+          "actual_rate": 0.204,
+          "n": 3135
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.264,
+          "actual_rate": 0.28,
+          "n": 2969
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.416,
+          "actual_rate": 0.347,
+          "n": 1363
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.588,
+          "actual_rate": 0.445,
+          "n": 969
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.866,
+          "actual_rate": 0.84,
+          "n": 855
+        }
+      ]
+    }
+  ]
+}

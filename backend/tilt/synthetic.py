@@ -43,13 +43,16 @@ def raw_features(rng: random.Random, lying: bool, leakiness: float) -> dict:
     return out
 
 
-def play(n_games: int = 12, leakiness: float = 1.0, seed: int = 7) -> MafiaSession:
+def play(n_games: int = 12, leakiness: float = 1.0, seed: int = 7, mafia_rate: float = 0.5,
+         same_words: bool = False) -> MafiaSession:
+    """`same_words` makes liars and truth-tellers say the same things (a placebo for word cues)."""
     clock = FakeClock()
     rng = random.Random(seed)
-    s = MafiaSession(seed=seed, clock=clock)
+    s = MafiaSession(seed=seed, clock=clock, mafia_rate=mafia_rate)
+    lying_bank = TRUTHFUL if same_words else LYING
     for i in range(6):
         lie = i % 2 == 1  # practice round: truth, lie, truth, lie, truth, lie
-        text = rng.choice(LYING if lie else TRUTHFUL)
+        text = rng.choice(lying_bank if lie else TRUTHFUL)
         s.calibrate(text, raw_features(rng, lie, leakiness), is_lie=lie)
     for _ in range(n_games):
         game = s.new_game()
@@ -60,7 +63,7 @@ def play(n_games: int = 12, leakiness: float = 1.0, seed: int = 7) -> MafiaSessi
                 s.speak(rng.choice(["one", "two", "three", "four", "five", "six"]))
             elif kind == "answer":
                 lying = game.you_mafia
-                s.speak(rng.choice(LYING if lying else TRUTHFUL), raw_features(rng, lying, leakiness))
+                s.speak(rng.choice(lying_bank if lying else TRUTHFUL), raw_features(rng, lying, leakiness))
             else:
                 s.speak(f"I vote {rng.choice([b for b in BOTS if game.alive[b]])}")
         s.view()  # drain lines

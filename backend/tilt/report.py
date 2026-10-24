@@ -31,7 +31,11 @@ def report(s: MafiaSession) -> dict:
     as_mafia = [v for v in s.votes if v.you_mafia]
     finished = [g for g in s.games if g.phase == "over"]
     mafia_games = [g for g in finished if g.you_mafia]
-    coef = {LABELS.get(k, k): v for k, v in s.model.coefficients().items()}
+    # A cue that never varied (e.g. no face model installed, no Gemini key) still has its prior weight,
+    # but that weight says nothing about you, so only cues that moved across your answers are ranked.
+    seen = [u.features for u in s.utterances if u.features]
+    varied = {k for k in s.model.coefficients() if len({round(float(f.get(k, 0.0)), 6) for f in seen}) > 1}
+    coef = {LABELS.get(k, k): v for k, v in s.model.coefficients().items() if k in varied}
     practice = [u for u in s.utterances if u.kind == "calibration"]
     return {
         "session_id": s.id,
@@ -52,6 +56,15 @@ def report(s: MafiaSession) -> dict:
         "caught_by_reader": sum(v.out_reader for v in as_mafia),
         "caught_by_blind": sum(v.out_blind for v in as_mafia),
         "face_model": s.face.status(),
+        # The town's Bayesian odds that you were the mafia when it voted, with and without the detector.
+        "town": {
+            "as_mafia_reader": round(float(np.mean([v.p_you_reader for v in as_mafia])), 3) if as_mafia else None,
+            "as_mafia_blind": round(float(np.mean([v.p_you_blind for v in as_mafia])), 3) if as_mafia else None,
+            "as_villager_reader": round(float(np.mean([v.p_you_reader for v in s.votes if not v.you_mafia])), 3)
+            if any(not v.you_mafia for v in s.votes) else None,
+            "timeline": [{"game": v.game, "day": v.day, "you_mafia": v.you_mafia, "reader": v.p_you_reader,
+                          "blind": v.p_you_blind, "p_catch": v.p_catch_reader} for v in s.votes],
+        },
         "timeline": [{"i": i, "p_lie": u.p_lie, "lie": bool(u.is_lie), "text": u.transcript, "cues": u.cues,
                       "game": u.game, "day": u.day} for i, u in enumerate(answers, start=1)],
     }
