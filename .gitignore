@@ -7,3 +7,4 @@ dist/
 *.db
 .env
 frontend/public/mediapipe/
+research/data/
