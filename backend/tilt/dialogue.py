@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import json
-import os
 import random
-import urllib.request
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+from . import gemini
 
 PERSONAS = {
     "Ava": "sharp ex-lawyer, direct, cross-examines people, short punchy sentences",
@@ -56,21 +54,8 @@ DOUBT = ["Nah, I'm not buying it.", "That doesn't add up though.", "Bit convenie
          "Hmm. Interesting answer. Too interesting."]
 
 
-def _gemini_json(prompt: str, timeout: float = 8):
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
-        return None
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-    body = {"contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}
-    req = urllib.request.Request(url, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json", "x-goog-api-key": key})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = json.loads(resp.read())
-        return json.loads(raw["candidates"][0]["content"]["parts"][0]["text"])
-    except Exception:
-        return None
+def _gemini_json(prompt: str, deadline: float = 8):
+    return gemini.generate_json(prompt, temperature=0.2, deadline=deadline)
 
 
 def judge_lie(question: str, answer: str, recent: list[str]) -> float | None:
@@ -100,21 +85,10 @@ def judge_lie(question: str, answer: str, recent: list[str]) -> float | None:
 
 
 def _gemini(prompt: str) -> list[dict] | None:
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
+    lines = gemini.generate_json(prompt, temperature=0.9, deadline=10)
+    if not isinstance(lines, list):
         return None
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-    body = {"contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9}}
-    req = urllib.request.Request(url, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json", "x-goog-api-key": key})
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            raw = json.loads(resp.read())
-        lines = json.loads(raw["candidates"][0]["content"]["parts"][0]["text"])
-        return [l for l in lines if isinstance(l, dict) and l.get("speaker") and l.get("text")]
-    except Exception:
-        return None
+    return [l for l in lines if isinstance(l, dict) and l.get("speaker") and l.get("text")]
 
 
 def ai_lines(*, speakers: list[str], task: str, game: dict, rng: random.Random, fallback) -> list[dict]:

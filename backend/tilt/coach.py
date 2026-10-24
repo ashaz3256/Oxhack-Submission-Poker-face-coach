@@ -5,7 +5,7 @@ import json
 import os
 import urllib.request
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+from . import gemini
 
 # ElevenLabs premade voices picked for natural, conversational delivery, one per player.
 # Override any with ELEVENLABS_VOICE_<NAME>.
@@ -59,9 +59,7 @@ def review(report: dict, summary: str) -> dict:
         "that gave them away, what it cost them in the game, and one drill to fix it. No markdown.\n\n"
         + json.dumps(slim)
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-    try:
-        raw = _post_json(url, {"contents": [{"parts": [{"text": prompt}]}]}, {"x-goog-api-key": key})
-        return {"source": "gemini", "text": json.loads(raw)["candidates"][0]["content"]["parts"][0]["text"].strip()}
-    except Exception as exc:  # the demo must not die on a flaky network
-        return {"source": "template", "text": summary, "error": str(exc)}
+    text = gemini.generate(prompt, deadline=20)
+    if not text:  # the demo must not die on a flaky network
+        return {"source": "template", "text": summary}
+    return {"source": "gemini", "text": text.strip()}
