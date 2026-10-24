@@ -5,7 +5,7 @@ import Report from './Report.jsx'
 import { FaceScanner } from './sensors/face.js'
 import { listen, sttSupported } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
-import { say } from './tts.js'
+import { prefetch, say, usingHumanVoices } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
 const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓' }
@@ -17,9 +17,15 @@ const LISTEN = {
   kill: { maxMs: 10000, silenceMs: 1000 },
   again: { maxMs: 30000, silenceMs: 1000 },
 }
-const CALIBRATION = [
-  "Welcome to Tilt. I'm your narrator. Before we deal, a quick calibration so we know what your honest face and voice look like. Tell us about your day.",
-  'Thanks. One more. What did you have for breakfast?',
+// Practice round: truths set your honest baseline; instructed lies teach the detector what your
+// lying looks like, before the game starts.
+const PRACTICE = [
+  { lie: false, text: "Hey, welcome to Tilt. Quick warm-up so the detector can learn you. First, the truth: tell me about your day so far." },
+  { lie: true, text: "Nice. Now lie to me. Tell me what you had for breakfast, but make it up. Sell it." },
+  { lie: false, text: "Okay, truth again. What's a film you really like, and why?" },
+  { lie: true, text: "Lie this time. Tell me about a country you've never been to, like you've been there." },
+  { lie: false, text: "Truth. What did you do last weekend?" },
+  { lie: true, text: "Last one, a lie. Tell me about a famous person you've met. You haven't. Convince me." },
 ]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -61,6 +67,7 @@ export default function Call({ dev }) {
   const [showReport, setShowReport] = useState(false)
   const [reportKey, setReportKey] = useState(0)
   const [devText, setDevText] = useState('')
+  const [practice, setPractice] = useState(null)
 
   // Live sensor readouts for the side panel, 6 times a second.
   useEffect(() => {
@@ -98,6 +105,7 @@ export default function Call({ dev }) {
     }
 
     async function speakLines(lines, state) {
+      prefetch(lines)
       for (const line of lines) {
         if (cancelled) return
         setSpeaking({ speaker: line.speaker, text: line.text, level: 0 })
@@ -132,12 +140,23 @@ export default function Call({ dev }) {
       setStatus(null)
       sid.current = (await api.create()).session_id
 
-      for (const prompt of CALIBRATION) {
-        await speakLines([{ speaker: 'Narrator', text: prompt }], {})
+      prefetch(PRACTICE.map((q) => ({ speaker: 'Narrator', text: q.text })))
+      let last = null
+      for (const [i, q] of PRACTICE.entries()) {
+        setPractice({ round: i + 1, of: PRACTICE.length, lie: q.lie, result: null })
+        await speakLines([{ speaker: 'Narrator', text: q.text }], {})
         const { transcript, raw } = await hear('calibrate')
-        await api.calibrate(sid.current, transcript, raw)
+        last = await api.calibrate(sid.current, transcript, raw, q.lie, q.text)
+        setRead({ p_lie: last.p_lie, cues: last.cues })
+        setPractice({ round: i + 1, of: PRACTICE.length, lie: q.lie, result: last })
+        await sleep(1600)
       }
-      await speakLines([{ speaker: 'Narrator', text: "Got it. Let's play." }], {})
+      setPractice(null)
+      const acc = last?.accuracy
+      const summary = acc != null
+        ? `Done. On your practice answers the detector is ${Math.round(acc * 100)} percent accurate, and it'll keep learning you as we play. Right, let's play.`
+        : "Done. The detector's got a feel for you now. Let's play."
+      await speakLines([{ speaker: 'Narrator', text: summary }], {})
 
       let state = await api.newGame(sid.current)
       while (!cancelled) {
@@ -226,6 +245,12 @@ export default function Call({ dev }) {
           <div className="read-label">chance your last answer was a lie</div>
           <div className="chips">{(read?.cues ?? []).map((c) => <span key={c} className="chip">{c}</span>)}</div>
         </div>
+        <div className="sensors">
+          <span className={live.face.face ? 'ok' : 'bad'}>Face {live.face.face ? '✓' : '✗'}</span>
+          <span className={live.voice.pitch ? 'ok' : 'bad'}>Voice {live.voice.pitch ? '✓' : '…'}</span>
+          <span className={live.face.hr ? 'ok' : 'bad'}>Pulse {live.face.hr ? '✓' : '…'}</span>
+          <span className={usingHumanVoices() ? 'ok' : 'bad'}>{usingHumanVoices() ? 'Human voices' : 'Browser voices'}</span>
+        </div>
         <h4>Face</h4>
         <Meter label="Blinking" value={live.face.blink} />
         <Meter label="Brows up" value={live.face.brow_raise} max={0.6} />
@@ -244,6 +269,18 @@ export default function Call({ dev }) {
         {game && <p className="hint">Game {game.number} · Day {game.day}{game.you_mafia != null ? ` · you are ${game.you_mafia ? 'the MAFIA' : 'a villager'}` : ''}</p>}
       </aside>
 
+      {practice && (
+        <div className={`practice ${practice.lie ? 'lie' : 'truth'}`}>
+          <div className="practice-step">Warm-up {practice.round} of {practice.of}</div>
+          <div className="practice-ask">{practice.lie ? 'Tell a LIE' : 'Tell the TRUTH'}</div>
+          {practice.result && (
+            <div className="practice-result">
+              Detector: {Math.round(practice.result.p_lie * 100)}% lie{' '}
+              {(practice.result.p_lie > 0.5) === practice.lie ? '✓ read you right' : '✗ fooled it'}
+            </div>
+          )}
+        </div>
+      )}
       {deal && <Deal {...deal} />}
       {showReport && sid.current && (
         <div className="report-drawer"><Report sessionId={sid.current} refreshKey={reportKey} /></div>

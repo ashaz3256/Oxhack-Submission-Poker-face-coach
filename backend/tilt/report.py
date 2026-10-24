@@ -31,7 +31,8 @@ def report(s: MafiaSession) -> dict:
     as_mafia = [v for v in s.votes if v.you_mafia]
     finished = [g for g in s.games if g.phase == "over"]
     mafia_games = [g for g in finished if g.you_mafia]
-    coef = {LABELS.get(k, k): v for k, v in s.lie_model.coefficients().items()}
+    coef = {LABELS.get(k, k): v for k, v in s.model.coefficients().items()}
+    practice = [u for u in s.utterances if u.kind == "calibration"]
     return {
         "session_id": s.id,
         "games": len(finished),
@@ -40,6 +41,9 @@ def report(s: MafiaSession) -> dict:
         "answers": len(answers),
         "lies": len(lies),
         "lie_auc": auc,
+        "game_accuracy": round(sum((u.p_lie > 0.5) == u.is_lie for u in answers) / len(answers), 3) if answers else None,
+        "practice_accuracy": s.model.cross_validated_accuracy(),
+        "practice": [{"text": u.transcript, "lie": bool(u.is_lie), "p_lie": u.p_lie} for u in practice],
         "coefficients": coef,
         "cues": cues,
         "days_as_mafia": len(as_mafia),

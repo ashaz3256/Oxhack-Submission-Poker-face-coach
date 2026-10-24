@@ -2,6 +2,8 @@
 // Per answer: median pitch and its wobble, loudness, how long before you started, the share
 // of pauses, and (with the transcript) words per voiced second.
 
+import { audioContext } from '../tts.js'
+
 function autocorrPitch(buf, sampleRate) {
   // Normalised autocorrelation between 70 and 400 Hz.
   const n = buf.length
@@ -29,7 +31,7 @@ function autocorrPitch(buf, sampleRate) {
 
 export class VoiceAnalyser {
   constructor(stream) {
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)()
+    this.ctx = audioContext()
     const src = this.ctx.createMediaStreamSource(stream)
     this.analyser = this.ctx.createAnalyser()
     this.analyser.fftSize = 2048

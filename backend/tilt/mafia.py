@@ -23,15 +23,15 @@ import uuid
 from dataclasses import dataclass, field
 
 from . import dialogue
-from .cues import LIE_FEATURES, Baseline, describe, feature_dict
+from .cues import describe
 from .language import find_names, last_name, parse_number, wants_again
-from .models import OnlineLogit
+from .liemodel import LieModel
 
 YOU = "You"
 BOTS = ["Ava", "Ben", "Cleo", "Dev", "Eli"]
 PLAYERS = [YOU] + BOTS
 NARRATOR = "Narrator"
-READ_WEIGHT = 2.5
+READ_WEIGHT = 3.5
 ACCUSED_SUSPICION = 0.2
 SILENCE_SUSPICION = 0.3
 BOT_MAFIA_HINT = 0.3
@@ -54,6 +54,7 @@ class Utterance:
     p_lie: float | None = None
     p_blind: float | None = None
     cues: list = field(default_factory=list)
+    llm: float | None = None   # the language judge's lie score, 0..1
 
 
 @dataclass
@@ -98,9 +99,7 @@ class MafiaSession:
         self.mafia_rate = mafia_rate
         self.clock = clock
         self.rng = random.Random(seed)
-        self.baseline = Baseline()
-        self.lie_model = OnlineLogit(LIE_FEATURES, prior_rate=0.4)
-        self.lie_rate = OnlineLogit([], prior_rate=0.4)
+        self.model = LieModel()
         self.utterances: list[Utterance] = []
         self.votes: list[DayVote] = []
         self.games: list[Game] = []
@@ -132,15 +131,24 @@ class MafiaSession:
         return {**ctx, **(extra or {})}
 
     # ---- calibration --------------------------------------------------------------------------
-    def calibrate(self, transcript: str, raw: dict) -> dict:
-        """A relaxed, honest answer before the game: your baseline, and a first 'truth' example."""
-        self.baseline.add(raw)
-        f = feature_dict(self.baseline, raw, transcript)
-        u = Utterance(game=0, day=0, t=self.clock(), kind="calibration", question="Tell us about your day.",
-                      transcript=transcript, role="none", raw=raw, features=f, is_lie=False)
+    def calibrate(self, transcript: str, raw: dict, is_lie: bool = False, question: str = "") -> dict:
+        """Practice round before the game: honest answers set your baseline, instructed lies teach the
+        detector what *your* lying looks like."""
+        llm = dialogue.judge_lie(question, transcript, []) if transcript else None
+        p, contrib, f = self.model.predict(raw, transcript, llm)
+        u = Utterance(game=0, day=0, t=self.clock(), kind="calibration", question=question, transcript=transcript,
+                      role="practice", raw=raw, features={k: round(v, 3) for k, v in f.items()}, is_lie=is_lie,
+                      p_lie=round(p, 3), p_blind=round(self.model.base_rate, 3), cues=self._cues(contrib, f), llm=llm)
         self.utterances.append(u)
-        self.lie_model.add([f[k] for k in LIE_FEATURES], False)
-        return {"baseline_samples": len(self.baseline.values["pitch"])}
+        self.model.add(raw, transcript, llm, is_lie, honest_baseline=not is_lie)
+        self.last_read = {"p_lie": round(p, 3), "cues": u.cues, "top": None, "features": u.features, "labelled": is_lie}
+        return {"p_lie": round(p, 3), "was_lie": is_lie, "cues": u.cues,
+                "accuracy": self.model.cross_validated_accuracy(), "samples": len(self.model.samples)}
+
+    @staticmethod
+    def _cues(contrib: dict, f: dict) -> list[str]:
+        ranked = sorted(contrib.items(), key=lambda kv: kv[1], reverse=True)
+        return [describe(k, f[k]) for k, v in ranked if v > 0.05][:3]
 
     # ---- game flow ----------------------------------------------------------------------------
     @property
@@ -153,7 +161,7 @@ class MafiaSession:
         game = Game(number=len(self.games) + 1, alive={p: True for p in PLAYERS})
         game.suspicion = {b: {p: self.rng.gauss(0, 0.3) for p in PLAYERS if p != b} for b in BOTS}
         self.games.append(game)
-        self._say(NARRATOR, "Six cards are face down. One of them is the mafia. Pick a card: say a number from one to six.")
+        self._say(NARRATOR, "Right. Six cards, face down. One of them's the mafia. Pick one. Just say a number, one to six.")
         self._await("pick", "Say a number from one to six")
         return game
 
@@ -192,9 +200,9 @@ class MafiaSession:
         game.phase = "talk"
         game.asked_today = 0
         if game.day == 1:
-            self._say(NARRATOR, "Day one. Everyone has their card. Somebody at this table is lying. Discuss.")
+            self._say(NARRATOR, "Day one. Everyone's got their card, and somebody here is lying. Go on then. Talk.")
         else:
-            self._say(NARRATOR, f"Morning comes. {game.victim} was found dead. Discuss.")
+            self._say(NARRATOR, f"Morning. {game.victim} didn't make it through the night. So. Who did it?")
         speakers = self.rng.sample(game.living(exclude=YOU), min(3, len(game.living(exclude=YOU))))
         self._round(game, speakers, opening=True)
 
@@ -256,31 +264,25 @@ class MafiaSession:
             if read is not None:
                 self._say(asker, dialogue.template_reaction(self.rng, read["p_lie"], read["top"]))
             game.phase = "vote"
-            self._say(NARRATOR, "Time to vote. Say the name of the player you want eliminated.")
+            self._say(NARRATOR, "Okay, time to vote. Say the name of who you want out.")
             self._await("vote", "Say a name: " + ", ".join(game.living(exclude=YOU)))
 
     def _analyse(self, game: Game, question: str, transcript: str, raw: dict) -> dict:
-        f = feature_dict(self.baseline, raw, transcript)
-        x = [f[k] for k in LIE_FEATURES]
-        p = self.lie_model.predict(x)
-        base = self.lie_rate.base_rate()
-        contrib = self.lie_model.contributions(x)
-        if contrib:
-            ranked = sorted(contrib.items(), key=lambda kv: kv[1], reverse=True)
-            top = [k for k, v in ranked if v > 0][:3]
-        else:
-            top = [k for k, _ in sorted(((k, v) for k, v in f.items() if k.endswith("_z")),
-                                        key=lambda kv: abs(kv[1]), reverse=True)][:3]
+        recent = [f"{l['speaker']}: {l['text']}" for l in self.chat[-10:]]
+        llm = dialogue.judge_lie(question, transcript, recent)
+        p, contrib, f = self.model.predict(raw, transcript, llm)
+        base = self.model.base_rate
+        ranked = sorted(contrib.items(), key=lambda kv: kv[1], reverse=True)
+        top = [k for k, v in ranked if v > 0.05][:3]
         n_words = len(transcript.split())
         is_lie = game.you_mafia if n_words >= MIN_CLAIM_WORDS else None
         u = Utterance(game=game.number, day=game.day, t=self.clock(), kind="answer", question=question,
                       transcript=transcript, role="mafia" if game.you_mafia else "villager", raw=raw,
                       features={k: round(v, 3) for k, v in f.items()}, is_lie=is_lie, p_lie=round(p, 3),
-                      p_blind=round(base, 3), cues=[describe(k, f[k]) for k in top])
+                      p_blind=round(base, 3), cues=[describe(k, f[k]) for k in top], llm=llm)
         self.utterances.append(u)
         if is_lie is not None:
-            self.lie_model.add(x, is_lie)
-            self.lie_rate.add([], is_lie)
+            self.model.add(raw, transcript, llm, is_lie)
         bump = READ_WEIGHT * (p - base)
         game.you_bump += bump
         for b in game.living(exclude=YOU):

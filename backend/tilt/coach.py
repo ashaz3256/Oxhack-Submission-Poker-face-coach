@@ -7,15 +7,19 @@ import urllib.request
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-# ElevenLabs premade voices, one per player. Override any with ELEVENLABS_VOICE_<NAME>.
+# ElevenLabs premade voices picked for natural, conversational delivery, one per player.
+# Override any with ELEVENLABS_VOICE_<NAME>.
 DEFAULT_VOICES = {
-    "Narrator": "JBFqnCBsd6RMkjVDRZzb",  # George
-    "Ava": "EXAVITQu4vr4xnSDxMaL",       # Sarah
-    "Ben": "pNInz6obpgDQGcFmaJgB",       # Adam
-    "Cleo": "21m00Tcm4TlvDq8ikWAM",      # Rachel
-    "Dev": "ErXwobaYiN019PkySvjV",       # Antoni
-    "Eli": "VR6AewLTigWG4xSOukaG",       # Arnold
+    "Narrator": "JBFqnCBsd6RMkjVDRZzb",  # George: warm British storyteller
+    "Ava": "Xb7hH8MSUJpSbSDYk0k2",       # Alice: confident British woman
+    "Ben": "IKne3meq5aSn9XLyUdCD",       # Charlie: laid-back Australian guy
+    "Cleo": "cgSgspJ2msm6clMCkdW9",      # Jessica: young, expressive
+    "Dev": "onwK4e9ZLuTAKqWW03F9",       # Daniel: calm British man
+    "Eli": "pqHfZKP75CvOlQylNhV4",       # Bill: older American man
 }
+# Lower stability = more expressive, human-sounding delivery; style adds emotion.
+VOICE_SETTINGS = {"stability": 0.35, "similarity_boost": 0.8, "style": 0.45, "use_speaker_boost": True}
+TTS_MODEL = os.environ.get("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
 
 def voice_for(speaker: str) -> str:
@@ -35,7 +39,8 @@ def speak(text: str, speaker: str) -> bytes | None:
         return None
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_for(speaker)}"
     try:
-        return _post_json(url, {"text": text, "model_id": "eleven_flash_v2_5"}, {"xi-api-key": key, "Accept": "audio/mpeg"})
+        body = {"text": text, "model_id": TTS_MODEL, "voice_settings": VOICE_SETTINGS}
+        return _post_json(url, body, {"xi-api-key": key, "Accept": "audio/mpeg"})
     except Exception:
         return None
 

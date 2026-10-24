@@ -31,7 +31,7 @@ LABELS = {
     "pause_z": "pauses", "latency_z": "slow to start", "blink_z": "blinking", "brow_raise_z": "raised eyebrows",
     "brow_down_z": "frowning", "lip_press_z": "pressed lips", "gaze_away_z": "looking away",
     "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate", "hedges": "hedging words",
-    "fillers": "ums and ahs", "negations": "denials", "log_words": "answer length",
+    "fillers": "ums and ahs", "negations": "denials", "log_words": "answer length", "llm": "what you said",
 }
 
 FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hmm", "like"}
@@ -93,6 +93,8 @@ def feature_dict(baseline: Baseline, raw: dict, transcript: str) -> dict[str, fl
 
 def describe(name: str, value: float) -> str:
     label = LABELS.get(name, name)
+    if name == "llm":
+        return "suspicious wording"
     if name.endswith("_z"):
         return f"{label} {'up' if value > 0 else 'down'} {abs(value):.1f}σ"
     return label

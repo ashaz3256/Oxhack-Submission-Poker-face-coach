@@ -47,8 +47,10 @@ def play(n_games: int = 12, leakiness: float = 1.0, seed: int = 7) -> MafiaSessi
     clock = FakeClock()
     rng = random.Random(seed)
     s = MafiaSession(seed=seed, clock=clock)
-    for _ in range(3):
-        s.calibrate("I had a pretty normal day, went to lectures and got food.", raw_features(rng, False, leakiness))
+    for i in range(6):
+        lie = i % 2 == 1  # practice round: truth, lie, truth, lie, truth, lie
+        text = rng.choice(LYING if lie else TRUTHFUL)
+        s.calibrate(text, raw_features(rng, lie, leakiness), is_lie=lie)
     for _ in range(n_games):
         game = s.new_game()
         while game.phase != "over":

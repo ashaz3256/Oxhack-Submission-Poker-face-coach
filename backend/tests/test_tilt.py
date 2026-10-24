@@ -42,7 +42,9 @@ def test_leaky_liar_is_caught_more_when_read():
 def test_api_plays_a_whole_game_by_voice():
     client = TestClient(app)
     sid = client.post("/api/sessions", json={}).json()["session_id"]
-    client.post(f"/api/sessions/{sid}/calibrate", json={"transcript": "hi I had a good day", "raw": {"pitch": 140}})
+    out = client.post(f"/api/sessions/{sid}/calibrate", json={"transcript": "hi I had a good day", "raw": {"pitch": 140}}).json()
+    assert 0 <= out["p_lie"] <= 1
+    client.post(f"/api/sessions/{sid}/calibrate", json={"transcript": "I once met the king, honestly", "raw": {"pitch": 170}, "is_lie": True})
     state = client.post(f"/api/sessions/{sid}/games").json()
     assert state["game"]["awaiting"]["kind"] == "pick"
     for _ in range(60):
@@ -58,3 +60,20 @@ def test_api_plays_a_whole_game_by_voice():
     assert r["games"] == 1 and r["headline"]
     assert client.post(f"/api/sessions/{sid}/review").json()["text"]
     assert client.post("/api/tts", json={"text": "hi", "speaker": "Ava"}).status_code == 204
+
+
+def test_practice_round_teaches_the_detector():
+    from tilt.liemodel import LieModel
+    from tilt.synthetic import raw_features
+    import random
+
+    rng = random.Random(0)
+    m = LieModel()
+    for i in range(10):
+        lie = i % 2 == 1
+        m.add(raw_features(rng, lie, 1.0), "I was at home" if not lie else "um honestly I was at home", None, lie,
+              honest_baseline=not lie)
+    p_lie, _, _ = m.predict(raw_features(rng, True, 1.0), "um honestly I swear", None)
+    p_truth, _, _ = m.predict(raw_features(rng, False, 1.0), "I was at home", None)
+    assert p_lie > 0.6 > p_truth
+    assert m.cross_validated_accuracy() >= 0.8

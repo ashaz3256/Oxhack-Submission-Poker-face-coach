@@ -30,6 +30,8 @@ class NewSession(BaseModel):
 class Said(BaseModel):
     transcript: str = ""
     raw: dict[str, float | None] = Field(default_factory=dict)
+    is_lie: bool = False      # practice round only: were you told to lie?
+    question: str = ""
 
 
 class Speech(BaseModel):
@@ -54,7 +56,10 @@ def _step(s: MafiaSession, fn) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True}
+    import os
+
+    return {"ok": True, "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")),
+            "gemini": bool(os.environ.get("GEMINI_API_KEY"))}
 
 
 @app.post("/api/sessions")
@@ -68,7 +73,7 @@ def create(body: NewSession) -> dict:
 @app.post("/api/sessions/{sid}/calibrate")
 def calibrate(sid: str, body: Said) -> dict:
     s = _session(sid)
-    out = s.calibrate(body.transcript, body.raw)
+    out = s.calibrate(body.transcript, body.raw, is_lie=body.is_lie, question=body.question)
     store.save(s)
     return out
 

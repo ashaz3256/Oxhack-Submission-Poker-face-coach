@@ -10,7 +10,7 @@ async function call(method, path, body) {
 
 export const api = {
   create: () => call('POST', '/sessions', {}),
-  calibrate: (sid, transcript, raw) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw }),
+  calibrate: (sid, transcript, raw, isLie, question) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw, is_lie: isLie, question }),
   newGame: (sid) => call('POST', `/sessions/${sid}/games`),
   speak: (sid, transcript, raw) => call('POST', `/sessions/${sid}/speak`, { transcript, raw }),
   report: (sid) => call('GET', `/sessions/${sid}/report`),

@@ -46,6 +46,8 @@ export default function Report({ sessionId, refreshKey }) {
     <div className="report">
       <h2>{r.headline}</h2>
       <div className="tiles">
+        <div className="tile"><b>{r.practice_accuracy != null ? `${Math.round(r.practice_accuracy * 100)}%` : '–'}</b><span>accuracy on your warm-up (cross-validated)</span></div>
+        <div className="tile"><b>{r.game_accuracy != null ? `${Math.round(r.game_accuracy * 100)}%` : '–'}</b><span>accuracy in the game (read before it learned)</span></div>
         <div className="tile"><b>{r.lie_auc ?? '–'}</b><span>lie-detection AUC (0.5 = coin flip)</span></div>
         <div className="tile"><b>{r.caught_by_reader} vs {r.caught_by_blind}</b><span>days caught as mafia: read vs unread</span></div>
         <div className="tile"><b>{r.lies}/{r.answers}</b><span>answers that were lies</span></div>

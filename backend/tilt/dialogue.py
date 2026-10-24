@@ -17,41 +17,86 @@ PERSONAS = {
 }
 
 QUESTIONS = [
-    "Where were you last night?",
-    "Are you the mafia? Look at us and answer.",
-    "Who do you think it is, and why?",
-    "You've been quiet. What are you hiding?",
-    "Do you trust {other}? Why?",
-    "If you were the mafia, who would you have killed first?",
-    "Tell us exactly what you did after dark.",
+    "Okay so where were you last night? Be specific.",
+    "Hang on. Are you the mafia? Look at us and say it.",
+    "Alright, who do you reckon it is, and why?",
+    "You've gone really quiet. What's going on with you?",
+    "Do you actually trust {other}? Why?",
+    "If you were the mafia, who'd you have gone for first?",
+    "Walk us through what you did after dark. Step by step.",
 ]
 SUSPECT = [
-    "My money's on {x}.", "{x} has been way too quiet.", "I don't trust {x}. Not one bit.",
-    "Something about {x} feels off to me.", "Did anyone else notice {x} dodging questions?",
+    "Honestly? My money's on {x}.", "{x}'s been way too quiet, no?", "I don't trust {x}. Not even a bit.",
+    "Something about {x} feels off, I can't put my finger on it.", "Did nobody else see {x} dodge that?",
 ]
 OPENERS = [
-    "Alright, someone here is lying. Let's find them.", "Nobody leaves until we know who did it.",
-    "Let's keep this civil. Mostly.", "I've got a bad feeling about today.",
+    "Right, someone here's lying. Let's just find them.", "Okay nobody's leaving till we know who did it.",
+    "Let's keep this civil. Ish. Ha.", "I've got a really bad feeling about today, guys.",
 ]
 CUE_CALLOUTS = {
-    "pitch_z": "Your voice went up a notch there.",
-    "pitch_var_z": "Your voice was wobbling on that one.",
-    "rate_z": "You sped right up when you said that.",
-    "pause_z": "That was a lot of pauses for a simple answer.",
-    "latency_z": "You took your time getting started.",
-    "blink_z": "You're blinking a lot all of a sudden.",
-    "gaze_away_z": "You couldn't look at us when you said that.",
-    "lip_press_z": "You pressed your lips together right after.",
-    "brow_raise_z": "Your eyebrows shot up there.",
-    "brow_down_z": "Why the frown?",
-    "hr_z": "I can practically hear your heart racing.",
-    "hedges": "So many 'honestly's. Hmm.",
-    "fillers": "Lot of 'ums' in that answer.",
-    "head_motion_z": "You're fidgeting.",
+    "pitch_z": "Wait, your voice just went right up there.",
+    "pitch_var_z": "Your voice was all wobbly on that one.",
+    "rate_z": "You sped up a lot just then, you know that?",
+    "pause_z": "That's a lot of pauses for such a simple question.",
+    "latency_z": "You took ages to start answering that.",
+    "blink_z": "Why are you blinking so much all of a sudden?",
+    "gaze_away_z": "You literally couldn't look at us when you said that.",
+    "lip_press_z": "You pressed your lips together right after, I saw that.",
+    "brow_raise_z": "Your eyebrows shot right up there, ha.",
+    "brow_down_z": "Why the frown though?",
+    "hr_z": "Mate, I can practically hear your heart going.",
+    "hedges": "That's a lot of 'honestly' for someone being honest.",
+    "fillers": "So many 'ums' in that answer.",
+    "head_motion_z": "You're fidgeting loads.",
+    "llm": "That story's got holes in it.",
 }
-CALM = ["Okay. That sounded honest to me.", "Fair enough, I believe you. For now.", "Hm. Steady answer.",
-        "That checks out, I think."]
-DOUBT = ["I'm not buying it.", "That doesn't add up.", "Convenient.", "Interesting answer. Too interesting."]
+CALM = ["Okay, yeah. That sounded honest to me.", "Fair enough. I believe you. For now.", "Hm. Pretty steady answer.",
+        "Yeah, that checks out I think."]
+DOUBT = ["Nah, I'm not buying it.", "That doesn't add up though.", "Bit convenient, isn't it?",
+         "Hmm. Interesting answer. Too interesting."]
+
+
+def _gemini_json(prompt: str, timeout: float = 8):
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        return None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", "x-goog-api-key": key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = json.loads(resp.read())
+        return json.loads(raw["candidates"][0]["content"]["parts"][0]["text"])
+    except Exception:
+        return None
+
+
+def judge_lie(question: str, answer: str, recent: list[str]) -> float | None:
+    """A language-only read: how deceptive does this answer sound, judged from the words alone?
+
+    The judge never sees the player's role. It looks for the verbal cues people use when they
+    lie: vague or missing detail, over-insistence on honesty, deflection, inconsistency with what
+    they said earlier, implausible content, and answers that dodge the question.
+    """
+    if not answer.strip():
+        return None
+    prompt = (
+        "You are a forensic linguist scoring one spoken answer for deception. You do NOT know if the speaker "
+        "is lying. Judge only the words: vagueness or lack of concrete detail, over-insisting on honesty "
+        "('honestly', 'I swear'), deflecting or dodging the question, contradicting earlier statements, "
+        "implausible or made-up-sounding content, distancing language. Plain, specific, direct answers "
+        "score low.\n"
+        f"Earlier conversation: {json.dumps(recent[-10:])}\n"
+        f"Question: {question!r}\nAnswer (speech-to-text, may have small errors): {answer!r}\n"
+        'Return JSON {"deception": number from 0 to 1, "reason": "few words"}.'
+    )
+    out = _gemini_json(prompt)
+    try:
+        return max(0.0, min(1.0, float(out["deception"])))
+    except Exception:
+        return None
 
 
 def _gemini(prompt: str) -> list[dict] | None:
@@ -75,8 +120,10 @@ def _gemini(prompt: str) -> list[dict] | None:
 def ai_lines(*, speakers: list[str], task: str, game: dict, rng: random.Random, fallback) -> list[dict]:
     """Lines for `speakers`, in order. `game` is the public context; `fallback` builds template lines."""
     prompt = (
-        "You write dialogue for AI players in a spoken game of Mafia with one human. Stay in character, "
-        "sound natural when read aloud, max 22 words per line, no stage directions, no emoji.\n"
+        "You write dialogue for players in a spoken game of Mafia with one human, played on a voice call. "
+        "Write exactly how real friends talk out loud: contractions, casual phrasing, short sentences, the odd "
+        "'wait', 'hang on', 'okay so', 'mate', a laugh written as 'ha', reacting to each other by name. Never "
+        "sound like an assistant or a narrator. Max 20 words per line, no stage directions, no emoji.\n"
         f"Players and personas: {json.dumps({s: PERSONAS[s] for s in speakers})}\n"
         f"Game state (secret roles are only known to the mafia player, never reveal them): {json.dumps(game)}\n"
         f"Task: {task}\n"
@@ -98,7 +145,7 @@ def template_question(rng: random.Random, others: list[str], day: int = 2) -> st
 
 
 def template_reaction(rng: random.Random, p_lie: float, top_cue: str | None) -> str:
-    if p_lie > 0.6 and top_cue in CUE_CALLOUTS:
+    if p_lie > 0.55 and top_cue in CUE_CALLOUTS:
         return CUE_CALLOUTS[top_cue] + " " + rng.choice(DOUBT)
     if p_lie > 0.55:
         return rng.choice(DOUBT)

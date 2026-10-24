@@ -157,3 +157,19 @@ button.link { border: none; color: var(--muted); text-decoration: underline; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
 th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 500; }
+
+/* Warm-up */
+.practice {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 8; text-align: center;
+  background: var(--panel); border: 2px solid var(--cool); border-radius: 14px; padding: 14px 28px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.5); animation: fade .3s ease;
+}
+.practice.lie { border-color: var(--hot); }
+.practice-step { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.practice-ask { font-size: 30px; font-weight: 800; color: var(--cool); }
+.practice.lie .practice-ask { color: var(--hot); }
+.practice-result { margin-top: 6px; font-size: 15px; }
+.sensors { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; }
+.sensors span { padding: 3px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.sensors .ok { color: var(--win); border-color: #2c5a40; }
+.sensors .bad { color: var(--muted); }
