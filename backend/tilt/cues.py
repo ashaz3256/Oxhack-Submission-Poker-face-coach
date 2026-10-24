@@ -21,7 +21,9 @@ RAW = {
     "gaze_away": 0.08,    # eyes looking out/down/up
     "head_motion": 0.01,  # spread of nose-tip position
     "smile": 0.1,         # mouthSmile blendshapes
-    "hr": 6.0,            # heart rate from the webcam, bpm
+    "hr": 6.0,            # heart rate: Presage when running, else the webcam pulse, bpm
+    "br": 2.0,            # breathing rate from Presage, breaths/min
+    "hrv": 10.0,          # heart rate variability (RMSSD) from Presage, ms; falls under stress
 }
 TEXT = ["hedges", "fillers", "negations", "log_words"]
 # Log-odds from the face model trained on the published I3D dataset (0 when no model is installed).
@@ -32,7 +34,8 @@ LABELS = {
     "pitch_z": "voice pitch", "pitch_var_z": "pitch wobble", "loudness_z": "loudness", "rate_z": "talking speed",
     "pause_z": "pauses", "latency_z": "slow to start", "blink_z": "blinking", "brow_raise_z": "raised eyebrows",
     "brow_down_z": "frowning", "lip_press_z": "pressed lips", "gaze_away_z": "looking away",
-    "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate", "hedges": "hedging words",
+    "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate",
+    "br_z": "breathing rate", "hrv_z": "heart rate variability", "hedges": "hedging words",
     "fillers": "ums and ahs", "negations": "denials", "log_words": "answer length",
     "i3d_face": "face (dataset-trained)",
 }

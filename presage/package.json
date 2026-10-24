@@ -1,0 +1,16 @@
+{
+  "name": "tilt-presage",
+  "private": true,
+  "type": "module",
+  "description": "Presage SmartSpectra sidecar that feeds vitals to the Tilt backend",
+  "scripts": {
+    "start": "node presage.mjs",
+    "mock": "node presage.mjs --mock"
+  },
+  "dependencies": {
+    "@smartspectra/node-sdk": "3.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

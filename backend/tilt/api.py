@@ -94,6 +94,23 @@ def speak(sid: str, body: Said) -> dict:
     return _step(s, turn)
 
 
+class PresageBatch(BaseModel):
+    samples: list[dict] = Field(default_factory=list, max_length=200)
+
+
+@app.post("/api/presage")
+def presage_in(body: PresageBatch) -> dict:
+    """Readings from the Presage sidecar (presage/presage.mjs)."""
+    from .presage import FEED
+    return {"stored": FEED.add(body.samples)}
+
+
+@app.get("/api/presage")
+def presage_status() -> dict:
+    from .presage import FEED
+    return FEED.status()
+
+
 @app.get("/api/face-model")
 def face_model_status() -> dict:
     """Whether a dataset-trained face model is installed, and how it scored on held-out participants."""

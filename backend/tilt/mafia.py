@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from . import dialogue
 from .cues import FACE_SCORE, LIE_FEATURES, Baseline, describe, feature_dict
 from .face_model import FaceScorer
+from .presage import FEED as PRESAGE
 from .language import find_names, last_name, parse_number, wants_again
 from .models import OnlineLogit
 
@@ -103,6 +104,8 @@ class MafiaSession:
         self.lie_model = OnlineLogit(LIE_FEATURES, prior_rate=0.4)
         self.lie_rate = OnlineLogit([], prior_rate=0.4)
         self.face = FaceScorer()
+        self.presage = PRESAGE
+        self._turn_start: float | None = None
         self.face_frames: list[list[float]] | None = None  # this turn's per-frame face primitives, set by the API
         self.utterances: list[Utterance] = []
         self.votes: list[DayVote] = []
@@ -137,6 +140,7 @@ class MafiaSession:
     # ---- calibration --------------------------------------------------------------------------
     def calibrate(self, transcript: str, raw: dict) -> dict:
         """A relaxed, honest answer before the game: your baseline, and a first 'truth' example."""
+        raw = self._with_presage(raw, self.clock() - 15)
         self.baseline.add(raw)
         f = feature_dict(self.baseline, raw, transcript)
         f[FACE_SCORE], _ = self.face.score(self._take_face_frames())
@@ -169,6 +173,7 @@ class MafiaSession:
         transcript = (transcript or "").strip()
         raw = raw or {}
         kind = game.awaiting["kind"]
+        self._turn_start = max(game.awaiting.get("since", 0), self.clock() - 25)
         {"pick": self._on_pick, "answer": self._on_answer, "vote": self._on_vote, "kill": self._on_kill,
          "again": self._on_again}[kind](game, transcript, raw)
 
@@ -263,11 +268,20 @@ class MafiaSession:
             self._say(NARRATOR, "Time to vote. Say the name of the player you want eliminated.")
             self._await("vote", "Say a name: " + ", ".join(game.living(exclude=YOU)))
 
+    def _with_presage(self, raw: dict, start: float) -> dict:
+        """Add Presage readings from this answer's time window; they win over the webcam pulse."""
+        extra = self.presage.window(start, self.clock())
+        source = extra.pop("_source", None)
+        if not extra:
+            return raw
+        return {**raw, **extra, "vitals_source": source}
+
     def _take_face_frames(self) -> list[list[float]] | None:
         frames, self.face_frames = self.face_frames, None
         return frames
 
     def _analyse(self, game: Game, question: str, transcript: str, raw: dict) -> dict:
+        raw = self._with_presage(raw, self._turn_start or self.clock() - 25)
         f = feature_dict(self.baseline, raw, transcript)
         f[FACE_SCORE], _ = self.face.score(self._take_face_frames())
         x = [f[k] for k in LIE_FEATURES]
