@@ -11,11 +11,11 @@ import { PresageRecorder } from './sensors/presage.js'
 import { WavRecorder } from './sensors/recorder.js'
 import { listen, markBroken, sttState, waitForSpeech } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
+import Face from './Face.jsx'
 import { cueFor, playDeath, playIntro, playJoin, playNight, playRing, playVerdict, preloadSfx, stopLoop, suspicionHeartbeat } from './sfx.js'
 import { cleanText, pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
-const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓' }
 const LISTEN = {
   calibrate: { maxMs: 15000, silenceMs: 1800 },
   pick: { maxMs: 9000, silenceMs: 900 },
@@ -388,7 +388,7 @@ export default function Call({ dev }) {
                 style={{ '--lvl': talking ? speaking.level : 0 }}
                 onClick={pickable ? () => choose(listening.kind === 'vote' ? `I vote ${pl.name}` : pl.name) : undefined}>
                 {pickable && <div className="pick-hint">{listening.kind === 'vote' ? 'Vote' : 'Kill'}</div>}
-                <div className="avatar-ring"><span className="avatar">{FACES[pl.name]}</span></div>
+                <div className="avatar-ring"><Face name={pl.name} /></div>
                 <div className="tile-label">
                   {pl.name}
                   {pl.card && <span className="card-chip">card {pl.card}</span>}
@@ -480,7 +480,7 @@ export default function Call({ dev }) {
           <div className="ring-pulse"><span>📞</span></div>
           <div className="connecting-text">{joined.length ? 'Players joining…' : status ?? 'Calling the town…'}</div>
           <div className="joins">
-            {joined.map((n) => <div key={n} className="join-toast">{FACES[n]} <b>{n}</b> joined the call</div>)}
+            {joined.map((n) => <div key={n} className="join-toast"><Face name={n} className="toast-face" /> <b>{n}</b> joined the call</div>)}
           </div>
         </div>
       )}

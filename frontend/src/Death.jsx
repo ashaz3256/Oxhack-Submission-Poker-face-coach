@@ -1,6 +1,7 @@
+import Face from './Face.jsx'
+
 // Someone dies: the screen bleeds, their heartbeat runs down to a flatline, and the town learns
 // who it was.
-const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓', You: '😶' }
 const DRIPS = [4, 11, 19, 27, 36, 44, 53, 61, 70, 78, 86, 94]
 
 export default function Death({ who, how, role }) {
@@ -16,7 +17,7 @@ export default function Death({ who, how, role }) {
       ))}
       <div className="death-body">
         <div className="death-face">
-          <span>{FACES[who] ?? '💀'}</span>
+          <span><Face name={who} className="death-portrait" /></span>
           <span className="death-skull">💀</span>
           <svg className="death-crack" viewBox="0 0 100 100" aria-hidden="true">
             <path d="M52 0 L46 22 L58 34 L44 52 L56 66 L48 100" />
