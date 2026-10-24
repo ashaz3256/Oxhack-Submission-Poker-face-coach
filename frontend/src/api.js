@@ -14,6 +14,7 @@ export const api = {
   newGame: (sid) => call('POST', `/sessions/${sid}/games`),
   speak: (sid, transcript, raw) => call('POST', `/sessions/${sid}/speak`, { transcript, raw }),
   report: (sid) => call('GET', `/sessions/${sid}/report`),
+  breakdown: (sid, game) => call('GET', `/sessions/${sid}/breakdown${game ? `?game=${game}` : ''}`),
   review: (sid) => call('POST', `/sessions/${sid}/review`),
   demo: () => call('POST', '/demo'),
 }

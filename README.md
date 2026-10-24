@@ -56,9 +56,11 @@ npm run dev                     # open http://localhost:5173 in Chrome or Edge
 
 1. Click **Join the call** and allow the camera and microphone. This is the only click.
 2. Do the warm-up: answer six questions out loud, lying when the narrator says LIE.
-3. When the cards appear, say a number from one to six.
-4. Answer the AIs' questions. At vote time, say a name.
-5. When the game ends, say "play again".
+3. After the spooky intro, say a number from one to six, or tap a card.
+4. Answer the AIs' questions. At vote time, say a name or tap their tile.
+5. When the game ends, read your breakdown: every answer and vote marked as right or wrong, your biggest tells and how to fix them. Say "play again" or tap the button.
+
+**Pause** any time with the button in the sidebar or the Esc key. The current turn is thrown away and asked again when you resume.
 
 **Needs:**
 - Chrome or Edge, because they have built-in speech recognition. Other browsers get a text box instead.
@@ -70,6 +72,7 @@ npm run dev                     # open http://localhost:5173 in Chrome or Edge
 
 - `GEMINI_API_KEY`: strongly recommended. Gemini judges your words for lies (a big accuracy boost), the AIs improvise their lines, and it writes your post-game review. Without it the lie read uses face, voice and word cues only, and the AIs use templates.
 - `ELEVENLABS_API_KEY`: needed for human-sounding voices. Each player gets their own natural ElevenLabs voice (multilingual v2), and lines are generated ahead so there are no gaps. Override any voice with `ELEVENLABS_VOICE_AVA` and so on. The status chip on the call says **Human voices** when it works. Without it you get the best voices your browser has (Edge's Natural voices sound best).
+- `PRESAGE_API_KEY`: **Presage** reads your heart rate and breathing rate from the webcam. The call records rolling 15-second clips, sends them to the Presage Physiology API, and the lie model uses Presage's heart rate (instead of our own forehead estimate) plus breathing rate. Readings lag by roughly a clip, and the sidebar shows a Presage chip when it's working. Chrome records MP4 directly; if your browser records WebM, the backend converts it with `ffmpeg` when installed.
 - `DATABASE_URL`: a Postgres connection string for **Tiger Data**. Run `backend/schema.sql` once so `utterances` becomes a hypertable. The default is local SQLite.
 
 ## Demo safety net

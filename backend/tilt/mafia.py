@@ -26,6 +26,7 @@ from . import dialogue
 from .cues import describe
 from .language import find_names, last_name, parse_number, wants_again
 from .liemodel import LieModel
+from .presage import PresageVitals
 
 YOU = "You"
 BOTS = ["Ava", "Ben", "Cleo", "Dev", "Eli"]
@@ -83,6 +84,7 @@ class Game:
     victim: str | None = None
     suspicion: dict[str, dict[str, float]] = field(default_factory=dict)
     you_bump: float = 0.0     # how much of the town's suspicion of you came from your tells
+    log: list[dict] = field(default_factory=list)   # answers, votes and kills, for the breakdown
 
     @property
     def you_mafia(self) -> bool:
@@ -106,11 +108,14 @@ class MafiaSession:
         self.chat: list[dict] = []
         self.outbox: list[dict] = []
         self.last_read: dict | None = None
+        self.presage = PresageVitals()
 
     # ---- talking ------------------------------------------------------------------------------
-    def _say(self, speaker: str, text: str) -> None:
+    def _say(self, speaker: str, text: str, event: dict | None = None) -> None:
         game = self.current
         line = {"speaker": speaker, "text": text, "game": game.number if game else 0, "day": game.day if game else 0}
+        if event:
+            line["event"] = event   # tells the call screen to play an animation with this line
         self.chat.append(line)
         self.outbox.append(line)
 
@@ -134,6 +139,7 @@ class MafiaSession:
     def calibrate(self, transcript: str, raw: dict, is_lie: bool = False, question: str = "") -> dict:
         """Practice round before the game: honest answers set your baseline, instructed lies teach the
         detector what *your* lying looks like."""
+        raw = self._with_vitals(raw)
         llm = dialogue.judge_lie(question, transcript, []) if transcript else None
         p, contrib, f = self.model.predict(raw, transcript, llm)
         u = Utterance(game=0, day=0, t=self.clock(), kind="calibration", question=question, transcript=transcript,
@@ -144,6 +150,10 @@ class MafiaSession:
         self.last_read = {"p_lie": round(p, 3), "cues": u.cues, "top": None, "features": u.features, "labelled": is_lie}
         return {"p_lie": round(p, 3), "was_lie": is_lie, "cues": u.cues,
                 "accuracy": self.model.cross_validated_accuracy(), "samples": len(self.model.samples)}
+
+    def _with_vitals(self, raw: dict) -> dict:
+        """Presage's heart and breathing rate, when fresh, replace our own webcam estimate."""
+        return {**raw, **self.presage.fresh()}
 
     @staticmethod
     def _cues(contrib: dict, f: dict) -> list[str]:
@@ -161,7 +171,8 @@ class MafiaSession:
         game = Game(number=len(self.games) + 1, alive={p: True for p in PLAYERS})
         game.suspicion = {b: {p: self.rng.gauss(0, 0.3) for p in PLAYERS if p != b} for b in BOTS}
         self.games.append(game)
-        self._say(NARRATOR, "Right. Six cards, face down. One of them's the mafia. Pick one. Just say a number, one to six.")
+        self._say(NARRATOR, "Right. Six cards, face down. One of them's the mafia. Pick one. Say a number, or tap a card.",
+                  event={"type": "intro", "game": game.number})
         self._await("pick", "Say a number from one to six")
         return game
 
@@ -202,7 +213,8 @@ class MafiaSession:
         if game.day == 1:
             self._say(NARRATOR, "Day one. Everyone's got their card, and somebody here is lying. Go on then. Talk.")
         else:
-            self._say(NARRATOR, f"Morning. {game.victim} didn't make it through the night. So. Who did it?")
+            self._say(NARRATOR, f"Morning. {game.victim} didn't make it through the night. So. Who did it?",
+                      event={"type": "death", "who": game.victim, "how": "night"})
         speakers = self.rng.sample(game.living(exclude=YOU), min(3, len(game.living(exclude=YOU))))
         self._round(game, speakers, opening=True)
 
@@ -214,7 +226,8 @@ class MafiaSession:
             lines = []
             for i, s in enumerate(speakers):
                 if i == len(speakers) - 1:
-                    q = dialogue.template_question(self.rng, [p for p in others if p != s] or others, game.day)
+                    asked = [u.question for u in self.utterances if u.game == game.number]
+                    q = dialogue.template_question(self.rng, [p for p in others if p != s] or others, game.day, asked)
                     lines.append({"speaker": s, "text": q})
                 elif read is not None and i == 0:
                     lines.append({"speaker": s, "text": dialogue.template_reaction(self.rng, read["p_lie"], read["top"])})
@@ -247,6 +260,7 @@ class MafiaSession:
             for b in game.living(exclude=YOU):
                 game.suspicion[b][YOU] += SILENCE_SUSPICION
             self._say(asker, "Nothing to say? That's telling.")
+            game.log.append({"type": "silent", "day": game.day, "question": question})
             read = None
         else:
             self._say(YOU, transcript)
@@ -268,6 +282,7 @@ class MafiaSession:
             self._await("vote", "Say a name: " + ", ".join(game.living(exclude=YOU)))
 
     def _analyse(self, game: Game, question: str, transcript: str, raw: dict) -> dict:
+        raw = self._with_vitals(raw)
         recent = [f"{l['speaker']}: {l['text']}" for l in self.chat[-10:]]
         llm = dialogue.judge_lie(question, transcript, recent)
         p, contrib, f = self.model.predict(raw, transcript, llm)
@@ -287,9 +302,18 @@ class MafiaSession:
         game.you_bump += bump
         for b in game.living(exclude=YOU):
             game.suspicion[b][YOU] += bump
+        game.log.append({"type": "answer", "day": game.day, "utterance": len(self.utterances) - 1,
+                         "bump": round(bump, 3), "rank": self._rank_of_you(game)})
         self.last_read = {"p_lie": round(p, 3), "cues": u.cues, "top": top[0] if top else None,
                           "features": u.features, "labelled": is_lie}
         return self.last_read
+
+    def _rank_of_you(self, game: Game) -> int:
+        """1 if you are now the town's top suspect, 2 if second, and so on."""
+        bots = game.living(exclude=YOU)
+        avg = {p: sum(game.suspicion[b][p] for b in bots if b != p) / max(1, len([b for b in bots if b != p]))
+               for p in game.living()}
+        return sorted(avg, key=avg.get, reverse=True).index(YOU) + 1
 
     def _on_vote(self, game: Game, transcript: str, raw: dict) -> None:
         candidates = game.living(exclude=YOU)
@@ -317,14 +341,18 @@ class MafiaSession:
         game.alive[out] = False
         role = "the mafia" if out == game.mafia else "a villager"
         who = "You are" if out == YOU else f"{out} is"
-        self._say(NARRATOR, f"{who} eliminated. {'You were' if out == YOU else out + ' was'} {role}.")
+        game.log.append({"type": "vote", "day": game.day, "you_voted": target, "you_voted_mafia": target == game.mafia,
+                         "votes": votes_reader, "votes_on_you": sum(v == YOU for v in votes_reader.values()),
+                         "out": out, "out_mafia": out == game.mafia, "out_blind": out_blind})
+        self._say(NARRATOR, f"{who} eliminated. {'You were' if out == YOU else out + ' was'} {role}.",
+                  event={"type": "death", "who": out, "how": "vote", "role": "mafia" if out == game.mafia else "villager"})
         if self._check_over(game):
             return
         if out == YOU:
             self._play_out(game)
             return
         game.phase = "night"
-        self._say(NARRATOR, "Night falls. Everyone close your eyes.")
+        self._say(NARRATOR, "Night falls. Everyone close your eyes.", event={"type": "night"})
         if game.you_mafia:
             self._say(NARRATOR, "Mafia, open your eyes. Whisper the name of who you want to eliminate.")
             self._await("kill", "Whisper a name: " + ", ".join(game.living(exclude=YOU)))
@@ -343,7 +371,7 @@ class MafiaSession:
         self._night(game, target or self.rng.choice(candidates))
 
     def _on_again(self, game: Game, transcript: str, raw: dict) -> None:
-        if transcript and not wants_again(transcript):
+        if not wants_again(transcript):
             self._await("again", "Say 'play again' for another round")
             return
         self.new_game()
@@ -351,6 +379,7 @@ class MafiaSession:
     def _night(self, game: Game, victim: str) -> None:
         game.alive[victim] = False
         game.victim = victim
+        game.log.append({"type": "kill", "day": game.day, "victim": victim, "by_you": game.you_mafia})
         game.awaiting = None
         if self._check_over(game):
             return
@@ -385,7 +414,7 @@ class MafiaSession:
         while game.phase != "over":
             victim = self.rng.choice(game.living(exclude=game.mafia))
             game.alive[victim] = False
-            self._say(NARRATOR, f"Night falls. {victim} is found dead.")
+            self._say(NARRATOR, f"Night falls. {victim} is found dead.", event={"type": "death", "who": victim, "how": "night"})
             if self._check_over(game):
                 return
             noise = {b: {p: self.rng.gauss(0, 0.25) for p in game.suspicion[b]} for b in game.living()}
@@ -410,7 +439,8 @@ class MafiaSession:
         you_won = (game.winner == "mafia") == game.you_mafia
         reveal = "" if game.you_mafia else f" The mafia was {game.mafia}."
         self._say(NARRATOR, f"The {game.winner} wins.{reveal} {'You win!' if you_won else 'You lose.'} "
-                            "Say 'play again' for another round.")
+                            "Say 'play again' for another round.",
+                  event={"type": "over", "winner": game.winner, "you_won": you_won, "mafia": game.mafia})
         self._await("again", "Say 'play again' for another round")
         return True
 

@@ -4,9 +4,10 @@
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
 export const sttSupported = Boolean(Recognition)
 
-// listen({ maxMs, silenceMs, voice, onInterim }) -> Promise<string>
+// listen({ maxMs, silenceMs, voice, onInterim, control }) -> Promise<string>
 // Ends when you have said something and then gone quiet for `silenceMs`, or at `maxMs`.
-export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim }) {
+// `control.stop(text)` ends it early (a click, or the pause button) and resolves with `text`.
+export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim, control }) {
   return new Promise((resolve) => {
     let finalText = ''
     let interim = ''
@@ -40,7 +41,7 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim }) {
     }
     rec.onerror = () => {}
 
-    const finish = () => {
+    const finish = (override) => {
       if (done) return
       done = true
       clearInterval(timer)
@@ -49,8 +50,9 @@ export function listen({ maxMs = 20000, silenceMs = 1500, voice, onInterim }) {
       } catch {
         // fine
       }
-      resolve((finalText + interim).trim())
+      resolve(override ?? (finalText + interim).trim())
     }
+    if (control) control.stop = finish
 
     const timer = setInterval(() => {
       const now = performance.now()

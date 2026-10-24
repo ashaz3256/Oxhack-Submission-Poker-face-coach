@@ -1,17 +1,18 @@
-// The deal: six face-down cards. You say a number, your card flips to reveal your role, and the
-// other five slide off to the AI players.
-export default function Deal({ picked, youMafia, cards }) {
+// The deal: six face-down cards. You say a number or tap a card, it flips to reveal your role,
+// and the other five slide off to the AI players.
+export default function Deal({ picked, youMafia, cards, onPick }) {
   return (
     <div className="deal-overlay">
-      <div className="deal-title">{picked ? 'Your card' : 'Say a number from one to six'}</div>
+      <div className="deal-title">{picked ? 'Your card' : 'Say a number, or tap a card'}</div>
       <div className="deal-row">
         {[1, 2, 3, 4, 5, 6].map((n, i) => {
           const mine = picked === n
           const owner = cards?.[i]
           const gone = picked && !mine
           return (
-            <div key={n} className={`deal-card ${mine ? 'mine' : ''} ${gone ? 'gone' : ''}`}
-              style={{ animationDelay: `${i * 90}ms`, transitionDelay: gone ? `${300 + i * 120}ms` : '0ms' }}>
+            <div key={n} className={`deal-card ${mine ? 'mine' : ''} ${gone ? 'gone' : ''} ${onPick && !picked ? 'pickable' : ''}`}
+              style={{ animationDelay: `${i * 90}ms`, transitionDelay: gone ? `${300 + i * 120}ms` : '0ms' }}
+              onClick={onPick && !picked ? () => onPick(n) : undefined}>
               <div className={`deal-inner ${mine && youMafia !== null ? 'flipped' : ''}`}>
                 <div className="deal-face deal-back">
                   <span className="deal-num">{n}</span>

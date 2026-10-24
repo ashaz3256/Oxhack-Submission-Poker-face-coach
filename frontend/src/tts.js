@@ -71,8 +71,23 @@ function browserVoice(speaker) {
   return voice
 }
 
+// The pause button freezes whoever is talking mid-sentence.
+let current = null
+let paused = false
+export function pauseSpeech() {
+  paused = true
+  current?.pause()
+  window.speechSynthesis?.pause()
+}
+export function resumeSpeech() {
+  paused = false
+  current?.play().catch(() => {})
+  window.speechSynthesis?.resume()
+}
+
 async function playMp3(blob, onLevel) {
   const audio = new Audio(URL.createObjectURL(blob))
+  current = audio
   const c = audioContext()
   const src = c.createMediaElementSource(audio)
   const an = c.createAnalyser()
@@ -96,6 +111,7 @@ async function playMp3(blob, onLevel) {
     audio.onerror = r
   })
   cancelAnimationFrame(raf)
+  current = null
   onLevel?.(0)
 }
 
@@ -114,17 +130,23 @@ function browserSpeak(speaker, text, onLevel) {
       onLevel?.(level)
     }, 60)
     u.onboundary = () => (level = 0.9)
+    // Some browsers never fire onend, so give up after a generous time spent actually talking.
+    let budget = 2500 + text.length * 110
+    const guard = setInterval(() => {
+      if (!paused) budget -= 250
+      if (budget <= 0) done()
+    }, 250)
     let finished = false
-    const done = () => {
+    function done() {
       if (finished) return
       finished = true
       clearInterval(pulse)
+      clearInterval(guard)
       onLevel?.(0)
       resolve()
     }
     u.onend = done
     u.onerror = done
-    setTimeout(done, 2500 + text.length * 110) // some browsers never fire onend
     window.speechSynthesis.speak(u)
   })
 }

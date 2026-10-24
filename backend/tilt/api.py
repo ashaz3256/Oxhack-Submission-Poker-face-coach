@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from . import coach  # noqa: E402
+from . import coach, presage  # noqa: E402
+from .breakdown import breakdown  # noqa: E402
 from .db import Store  # noqa: E402
 from .mafia import MafiaSession  # noqa: E402
 from .report import headline, report  # noqa: E402
@@ -59,7 +60,7 @@ def health() -> dict:
     import os
 
     return {"ok": True, "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")),
-            "gemini": bool(os.environ.get("GEMINI_API_KEY"))}
+            "gemini": bool(os.environ.get("GEMINI_API_KEY")), "presage": bool(presage.api_key())}
 
 
 @app.post("/api/sessions")
@@ -94,6 +95,31 @@ def speak(sid: str, body: Said) -> dict:
 def get_report(sid: str) -> dict:
     r = report(_session(sid))
     return {**r, "headline": headline(r)}
+
+
+@app.get("/api/sessions/{sid}/breakdown")
+def get_breakdown(sid: str, game: int | None = None) -> dict:
+    return breakdown(_session(sid), game)
+
+
+MAX_CLIP = 40 * 1024 * 1024
+
+
+@app.post("/api/sessions/{sid}/vitals")
+async def upload_vitals(sid: str, request: Request, ext: str = "webm") -> dict:
+    """A ~15 second webcam clip for Presage. Returns at once; the reading arrives in the background."""
+    s = _session(sid)
+    data = await request.body()
+    if not data or len(data) > MAX_CLIP:
+        raise HTTPException(413, "clip missing or too large")
+    ext = ext.lower() if ext.lower() in ("webm", "mp4", "mov", "avi", "mkv") else "webm"
+    queued = s.presage.submit(data, ext)
+    return {"queued": queued, **s.presage.view()}
+
+
+@app.get("/api/sessions/{sid}/vitals")
+def get_vitals(sid: str) -> dict:
+    return _session(sid).presage.view()
 
 
 @app.post("/api/sessions/{sid}/review")

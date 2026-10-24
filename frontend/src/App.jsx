@@ -37,8 +37,15 @@ export default function App() {
     )
   }
   return (
+    <div className="lobby-scene">
+      <div className="intro-stars" />
+      <div className="lobby-moon" />
+      <div className="intro-fog" />
+      <div className="lobby-cards" aria-hidden="true">
+        {[1, 2, 3, 4, 5, 6].map((n, i) => <span key={n} style={{ '--i': i }}>{n}</span>)}
+      </div>
     <div className="lobby">
-      <h1>Tilt</h1>
+      <h1 className="creepy">Tilt</h1>
       <p className="tag">Mafia on a call with five AIs. Every word you say is checked for lies.</p>
       <ol className="how">
         <li>Everyone draws a card. Yours says <b>mafia</b> or <b>villager</b>.</li>
@@ -46,9 +53,10 @@ export default function App() {
         <li>We scan your eyes, brows and mouth, your pitch and speed, and your words. A model learns when you lie.</li>
         <li>The AIs hear your tells. Lie badly and they vote you out.</li>
       </ol>
-      <button className="primary big" onClick={join}>Join the call</button>
+      <button className="primary big join" onClick={join}>🩸 Join the call</button>
       <p className="hint">Needs a webcam and microphone. {sttSupported ? 'Hands-free from here on.' : 'Use Chrome or Edge for speech recognition.'}</p>
       <button className="link" disabled={busy} onClick={demo}>{busy ? 'Simulating 15 games…' : 'See a demo report (simulated player)'}</button>
+    </div>
     </div>
   )
 }

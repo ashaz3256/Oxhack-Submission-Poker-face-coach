@@ -139,9 +139,15 @@ def ai_lines(*, speakers: list[str], task: str, game: dict, rng: random.Random, 
 NIGHT_QUESTIONS = {QUESTIONS[0], QUESTIONS[6]}
 
 
-def template_question(rng: random.Random, others: list[str], day: int = 2) -> str:
+def template_question(rng: random.Random, others: list[str], day: int = 2, asked: list[str] = ()) -> str:
+    """A question for you, avoiding ones already put to you this game."""
     bank = QUESTIONS if day > 1 else [q for q in QUESTIONS if q not in NIGHT_QUESTIONS]
-    return rng.choice(bank).format(other=rng.choice(others))
+
+    def stem(q: str) -> str:
+        return q.split("{")[0] if len(q.split("{")[0]) >= 8 else q
+
+    fresh = [q for q in bank if not any(a.startswith(stem(q)) for a in asked)]
+    return rng.choice(fresh or bank).format(other=rng.choice(others))
 
 
 def template_reaction(rng: random.Random, p_lie: float, top_cue: str | None) -> str:

@@ -44,7 +44,8 @@ def last_name(text: str, candidates: list[str]) -> str | None:
 
 
 def parse_number(text: str, lo: int = 1, hi: int = 6) -> int | None:
-    for w in words(text):
+    # Speech-to-text often writes numbers as digits ("number 3"), so read digits as well as words.
+    for w in re.findall(r"[a-z']+|\d+", text.lower()):
         n = NUMBERS.get(w)
         if n is not None and lo <= n <= hi:
             return n

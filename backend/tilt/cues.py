@@ -21,7 +21,8 @@ RAW = {
     "gaze_away": 0.08,    # eyes looking out/down/up
     "head_motion": 0.01,  # spread of nose-tip position
     "smile": 0.1,         # mouthSmile blendshapes
-    "hr": 6.0,            # heart rate from the webcam, bpm
+    "hr": 6.0,            # heart rate (Presage when available, else our forehead estimate), bpm
+    "rr": 2.0,            # breathing rate from Presage, breaths per minute
 }
 TEXT = ["hedges", "fillers", "negations", "log_words"]
 LIE_FEATURES = [f"{k}_z" for k in RAW] + TEXT
@@ -30,7 +31,7 @@ LABELS = {
     "pitch_z": "voice pitch", "pitch_var_z": "pitch wobble", "loudness_z": "loudness", "rate_z": "talking speed",
     "pause_z": "pauses", "latency_z": "slow to start", "blink_z": "blinking", "brow_raise_z": "raised eyebrows",
     "brow_down_z": "frowning", "lip_press_z": "pressed lips", "gaze_away_z": "looking away",
-    "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate", "hedges": "hedging words",
+    "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate", "rr_z": "breathing rate", "hedges": "hedging words",
     "fillers": "ums and ahs", "negations": "denials", "log_words": "answer length", "llm": "what you said",
 }
 

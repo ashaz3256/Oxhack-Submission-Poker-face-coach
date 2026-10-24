@@ -23,7 +23,7 @@ FEATURES = LIE_FEATURES + ["llm"]
 PRIOR = {
     "pitch_z": 0.35, "pitch_var_z": 0.1, "loudness_z": 0.0, "rate_z": -0.1, "pause_z": 0.3, "latency_z": 0.35,
     "blink_z": 0.15, "brow_raise_z": 0.1, "brow_down_z": 0.05, "lip_press_z": 0.3, "gaze_away_z": 0.15,
-    "head_motion_z": -0.1, "smile_z": -0.05, "hr_z": 0.25,
+    "head_motion_z": -0.1, "smile_z": -0.05, "hr_z": 0.25, "rr_z": 0.2,
     "hedges": 0.35, "fillers": 0.25, "negations": 0.25, "log_words": -0.2, "llm": 0.9,
 }
 # Word cues are rates per word; scale them so one unit is a meaningful change.
