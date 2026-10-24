@@ -11,8 +11,8 @@ import { PresageRecorder } from './sensors/presage.js'
 import { WavRecorder } from './sensors/recorder.js'
 import { listen, markBroken, sttState, waitForSpeech } from './sensors/stt.js'
 import { VoiceAnalyser } from './sensors/voice.js'
-import { playDeath, playIntro, playJoin, playNight, playRing, playVerdict } from './sfx.js'
-import { pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
+import { cueFor, playDeath, playIntro, playJoin, playNight, playRing, playVerdict, preloadSfx, stopLoop, suspicionHeartbeat } from './sfx.js'
+import { cleanText, pauseSpeech, prefetch, resumeSpeech, say, voiceStatus } from './tts.js'
 
 const BOTS = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli']
 const FACES = { Ava: '👩‍🦰', Ben: '🧔', Cleo: '👩‍🦱', Dev: '👨‍🦲', Eli: '🧓' }
@@ -72,6 +72,8 @@ export default function Call({ dev }) {
   const silentFails = useRef(0)
   const recorder = useRef(null)
   const [typing, setTyping] = useState(dev)
+  const lastRead = useRef(null)
+  const townRef = useRef(null)
   const [status, setStatus] = useState('Starting camera and microphone…')
   const [error, setError] = useState(null)
   const [game, setGame] = useState(null)
@@ -155,6 +157,7 @@ export default function Call({ dev }) {
       const measure = kind === 'answer' || kind === 'calibrate'
       for (;;) {
         await gate()
+        if (kind === 'answer') suspicionHeartbeat(townRef.current ?? lastRead.current?.p_lie)
         if (measure) {
           face.current?.beginTurn()
           voice.current?.beginTurn()
@@ -176,6 +179,7 @@ export default function Call({ dev }) {
         interrupt.current = null
         control.stop?.('')
         const audio = recorder.current?.stop()
+        stopLoop('heartbeat')
         if (source === 'pause') {
           setListening(null)
           if (measure) {
@@ -240,7 +244,8 @@ export default function Call({ dev }) {
           setVerdict({ won: ev.you_won, mafia: ev.mafia })
           playVerdict(ev.you_won)
         }
-        setSpeaking({ speaker: line.speaker, text: line.text, level: 0 })
+        cueFor(line.speaker, line.text)
+        setSpeaking({ speaker: line.speaker, text: cleanText(line.text), level: 0 })
         const drew = line.text.match(/^You drew card (\d)/)
         if (drew && state.game) {
           setDeal({ picked: Number(drew[1]), youMafia: state.game.you_mafia, cards: cardOwners(state.game.players) })
@@ -280,6 +285,7 @@ export default function Call({ dev }) {
         setError(`Face scanner failed to load (${e.message}). Voice and words are still analysed.`)
       }
       setStatus(null)
+      preloadSfx()
       sid.current = (await api.create()).session_id
       presage.current = new PresageRecorder(stream, sid.current)
       presage.current.start()
@@ -317,7 +323,10 @@ export default function Call({ dev }) {
       let reviewed = null
       while (!cancelled) {
         setGame(state.game)
-        if (state.read) setRead(state.read)
+        if (state.read) {
+          setRead(state.read)
+          lastRead.current = state.read
+        }
         const intro = state.lines.some((l) => l.event?.type === 'intro')
         if (state.game?.awaiting?.kind === 'pick' && !intro) setDeal({ picked: null, youMafia: null })
         await speakLines(state.lines, state)

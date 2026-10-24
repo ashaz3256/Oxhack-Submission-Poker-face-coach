@@ -50,8 +50,8 @@ CUE_CALLOUTS = {
 }
 CALM = ["Okay, yeah. That sounded honest to me.", "Fair enough. I believe you. For now.", "Hm. Pretty steady answer.",
         "Yeah, that checks out I think."]
-DOUBT = ["Nah, I'm not buying it.", "That doesn't add up though.", "Bit convenient, isn't it?",
-         "Hmm. Interesting answer. Too interesting."]
+DOUBT = ["[sarcastic] Nah, I'm not buying it.", "That doesn't add up though.", "[sarcastic] Bit convenient, isn't it?",
+         "[curious] Hmm. Interesting answer. Too interesting."]
 
 
 def _gemini_json(prompt: str, deadline: float = 8):
@@ -97,7 +97,9 @@ def ai_lines(*, speakers: list[str], task: str, game: dict, rng: random.Random, 
         "You write dialogue for players in a spoken game of Mafia with one human, played on a voice call. "
         "Write exactly how real friends talk out loud: contractions, casual phrasing, short sentences, the odd "
         "'wait', 'hang on', 'okay so', 'mate', a laugh written as 'ha', reacting to each other by name. Never "
-        "sound like an assistant or a narrator. Max 20 words per line, no stage directions, no emoji.\n"
+        "sound like an assistant or a narrator. Max 20 words per line, no emoji. You may start a line with ONE delivery "
+        "tag in square brackets when the moment calls for it, from [sarcastic], [nervous], [laughs], [sighs], "
+        "[whispers], [curious], [excited], [mischievously], [shouting]; no other stage directions.\n"
         f"Players and personas: {json.dumps({s: PERSONAS[s] for s in speakers})}\n"
         f"Game state (secret roles are only known to the mafia player, never reveal them): {json.dumps(game)}\n"
         f"Task: {task}\n"

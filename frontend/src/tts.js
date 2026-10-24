@@ -168,7 +168,7 @@ async function playMp3(blob, onLevel) {
 function browserSpeak(speaker, text, onLevel) {
   return new Promise((resolve) => {
     if (!('speechSynthesis' in window)) return resolve()
-    const u = new SpeechSynthesisUtterance(text)
+    const u = new SpeechSynthesisUtterance(cleanText(text))
     const voice = browserVoice(speaker)
     if (voice) u.voice = voice
     u.pitch = 1
@@ -201,6 +201,9 @@ function browserSpeak(speaker, text, onLevel) {
     window.speechSynthesis.speak(u)
   })
 }
+
+// Delivery tags like [whispers] are for the voice model, not for captions or browser voices.
+export const cleanText = (text) => (text || '').replace(/\[[a-zA-Z ]{2,24}\]\s*/g, '').trim()
 
 export async function say(speaker, text, onLevel) {
   if (FAST) return new Promise((r) => setTimeout(r, 60))

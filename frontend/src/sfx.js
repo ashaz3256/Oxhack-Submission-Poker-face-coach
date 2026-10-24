@@ -95,3 +95,88 @@ export function playJoin(i = 0) {
   tone('triangle', 520 + i * 60, t, { attack: 0.01, hold: 0.05, release: 0.18, peak: 0.12 })
   tone('triangle', 780 + i * 60, t + 0.08, { attack: 0.01, hold: 0.05, release: 0.2, peak: 0.1 })
 }
+
+// ---- Generated sound effects (backend/scripts/make_sfx.py writes them to /sfx) --------------------
+// Only what the synthesised sounds above don't cover: dealing and flipping cards, a ticking clock
+// while the town votes, a gavel on eliminations, and a heartbeat that follows the town's odds that
+// you are the mafia. Every call is silent if its file is missing.
+
+const FILES = ['heartbeat', 'card_flip', 'deal', 'gavel', 'vote_tension']
+const buffers = {}
+const loops = {}
+
+export function preloadSfx() {
+  if (FAST) return
+  for (const name of FILES) {
+    if (buffers[name] !== undefined) continue
+    buffers[name] = null
+    fetch(`/sfx/${name}.mp3`)
+      .then((r) => (r.ok && (r.headers.get('content-type') || '').includes('audio') ? r.arrayBuffer() : null))
+      .then((b) => (b ? audioContext().decodeAudioData(b) : null))
+      .then((buf) => (buffers[name] = buf))
+      .catch(() => (buffers[name] = null))
+  }
+}
+
+function source(name, volume, rate = 1, loop = false) {
+  const buf = buffers[name]
+  if (!buf) return null
+  const c = audioContext()
+  const src = c.createBufferSource()
+  const gain = c.createGain()
+  src.buffer = buf
+  src.loop = loop
+  src.playbackRate.value = rate
+  gain.gain.value = volume
+  src.connect(gain)
+  gain.connect(c.destination)
+  src.start()
+  return { src, gain }
+}
+
+export function playSfx(name, volume = 0.6) {
+  source(name, volume)
+}
+
+export function startLoop(name, volume = 0.3, rate = 1) {
+  const s = loops[name]
+  if (s) {
+    const t = audioContext().currentTime
+    s.gain.gain.linearRampToValueAtTime(volume, t + 0.4)
+    s.src.playbackRate.linearRampToValueAtTime(rate, t + 0.4)
+    return
+  }
+  const fresh = source(name, 0, rate, true)
+  if (!fresh) return
+  fresh.gain.gain.linearRampToValueAtTime(volume, audioContext().currentTime + 0.6)
+  loops[name] = fresh
+}
+
+export function stopLoop(name) {
+  const s = loops[name]
+  if (!s) return
+  delete loops[name]
+  const t = audioContext().currentTime
+  s.gain.gain.linearRampToValueAtTime(0, t + 0.6)
+  s.src.stop(t + 0.7)
+}
+
+// Louder and faster the more the town suspects you (0..1).
+export function suspicionHeartbeat(p) {
+  const x = Math.max(0, Math.min(1, p ?? 0.2))
+  startLoop('heartbeat', 0.15 + 0.5 * x, 0.85 + 0.9 * x)
+}
+
+// Cues keyed off what the narrator says.
+const CUES = [
+  [/^Right\. Six cards/, () => playSfx('deal', 0.5)],
+  [/^You drew card/, () => playSfx('card_flip', 0.8)],
+  [/time to vote/i, () => startLoop('vote_tension', 0.2)],
+  [/eliminated\.|^The town eliminates/, () => { stopLoop('vote_tension'); playSfx('gavel', 0.7) }],
+  [/^Night falls|wins\./, () => stopLoop('vote_tension')],
+]
+
+export function cueFor(speaker, text) {
+  if (speaker !== 'Narrator') return
+  for (const [re, fn] of CUES) if (re.test(text)) fn()
+}

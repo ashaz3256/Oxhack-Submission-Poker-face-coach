@@ -62,23 +62,29 @@ def speak(text: str, speaker: str) -> bytes | None:
     if not key:
         _last_error = "No ELEVENLABS_API_KEY in backend/.env"
         return None
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_for(speaker)}"
-    body = {"text": text, "model_id": TTS_MODEL, "voice_settings": VOICE_SETTINGS}
+    from .voices import synthesize  # expressive model and delivery tags, this model as the fallback
+    try:
+        audio = synthesize(text, speaker, voice_for(speaker), VOICE_SETTINGS, TTS_MODEL, post=_tts)
+    except Exception as exc:
+        _last_error = _explain(exc)
+        return None
+    if audio:
+        _last_error = None
+    return audio
+
+
+def _tts(voice: str, body: dict, key: str) -> bytes:
+    """One ElevenLabs request: at most two at a time, retried once if rate-limited."""
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}"
     with _slots:
         for attempt in range(2):
             try:
-                audio = _post_json(url, body, {"xi-api-key": key, "Accept": "audio/mpeg"}, timeout=20)
-                _last_error = None
-                return audio
+                return _post_json(url, body, {"xi-api-key": key, "Accept": "audio/mpeg"}, timeout=20)
             except urllib.error.HTTPError as exc:
-                _last_error = _explain(exc)
                 if exc.code != 429 or attempt:
-                    return None
+                    raise
                 time.sleep(1.0)
-            except Exception as exc:
-                _last_error = _explain(exc)
-                return None
-    return None
+    raise RuntimeError("unreachable")
 
 
 def review(report: dict, summary: str) -> dict:
