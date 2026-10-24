@@ -19,8 +19,38 @@ person can be in training and test. We split by participant and report the gap.
 | Step | Script | What it does |
 | --- | --- | --- |
 | 1 | `fetch_probe.py` | Downloads the small files and the first 3 MB of the 18 GB landmark CSV (HTTP range request) to confirm the schema and how recordings map to people. |
-| 2 | `extract_landmark_features.py` | Streams the 18 GB CSV once, keeps 17 landmarks, writes one row per recording. Never stores the file. `--check` verifies the column mapping on the probe sample with a face-geometry test. |
-| 3 | `train_face_model.py` | Regularised logistic regression, evaluated by participant. Writes `results/face_model_eval.json` and, only if the 95% CI on AUC is above 0.5, `backend/tilt/pretrained_face_model.json`. |
+| 2 | `extract_landmark_features.py` | Streams the 18 GB CSV once, drops frames where FaceMesh lost the face, turns the rest upright, writes one row per recording. Never stores the file. `--check` verifies the column mapping on the probe sample with a face-geometry test. |
+| 3 | `train_face_model.py` | Regularised logistic regression, evaluated by participant, on recordings with at least 10 clean frames. Writes `results/face_model_eval.json` and, only if the 95% CI on AUC is above 0.5, `backend/tilt/pretrained_face_model.json`. |
+
+Participants: `Video_Name` is `{LIE|TRUTH}_{ethnicity}_{number}_{sex}_..._{take}`, and
+`{ethnicity}_{number}_{sex}` identifies a person (196 of them, each with exactly 4 truthful and 4
+deceptive recordings in the audio and text files):
+
+    --participant-regex '^(?:LIE|TRUTH)_([A-Za-z]+_\d+_(?:Male|Female))_'
+
+## Data quality: what the landmark file actually contains
+
+Three things about `LandmarkDataset.csv` are not in its documentation. Each would have silently
+produced a model trained on the wrong numbers.
+
+1. **Column names are labels, not an index.** The face columns are called `Contour_Chin`,
+   `Left_Eye_Upper_0` and so on, but they sit in MediaPipe index order (column *k* is landmark *k*).
+   Checked blind: matching the 468 columns of a recording to MediaPipe's canonical face mesh by
+   geometry alone (optimal assignment plus affine fit, no names used) put 450 of 468 back in index
+   order; the other 18 are near-ties with identical fit. The file also has two metadata columns
+   (`ethnic_group`, `ethnic_key`) after `Class`.
+2. **The faces are sideways.** In every clean frame sampled, the face is rotated about 90° (forehead
+   to chin runs along image x): phone video whose rotation flag was ignored. The extractor turns each
+   frame upright before measuring, so yaw, pitch, gaze and blinks are on the axes the game uses.
+3. **FaceMesh often lost the face.** MediaPipe returns 468 points even when tracking fails, and on
+   sideways faces it often does: the points jump to a distorted shape, with the face angle swinging
+   30–40° between frames. A similarity fit to the canonical face separates the two cleanly (clean
+   frames 0.05–0.08 relative error, lost frames 0.12–0.18; cut at 0.10). In 25 recordings sampled
+   evenly through the file, 9 were mostly clean and 16 mostly lost. After the cut, no frame fails
+   the separate face-geometry check (forehead above chin, brows above eyes, and so on).
+
+Dropping frames is only safe if it doesn't depend on truth or lie. The trainer reports the share of
+clean frames and the usable recordings for each label (`selection` in `face_model_eval.json`).
 
 ## Features (`backend/tilt/face_features.py`)
 

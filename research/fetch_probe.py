@@ -27,7 +27,7 @@ UA = {"User-Agent": "tilt-oxhack-research/1.0"}
 def get(url: str, headers: dict | None = None) -> tuple[int, dict, bytes]:
     req = urllib.request.Request(url, headers={**UA, **(headers or {})})
     with urllib.request.urlopen(req, timeout=120) as r:
-        return r.status, dict(r.headers), r.read()
+        return r.status, {k.title(): v for k, v in r.headers.items()}, r.read()  # Zenodo sends lowercase names
 
 
 def probe_range(start: int, length: int) -> dict:
@@ -52,7 +52,7 @@ def main() -> int:
         print("Server ignored the Range header (status %s); partial access is not possible." % head["status"])
     text = head["body"].decode("utf-8", errors="replace")
     lines = text.split("\n")[:-1]  # drop the partial last line
-    (OUT / "landmark_head.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (OUT / "landmark_head.csv").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
     header = lines[0].split(",") if lines else []
     report["landmark_columns"] = len(header)
     report["landmark_rows_in_head"] = max(len(lines) - 1, 0)
@@ -67,7 +67,8 @@ def main() -> int:
         mid = probe_range(total // 2, 200_000)
         report["landmark_range_middle"] = {k: v for k, v in mid.items() if k != "body"}
         mid_lines = mid["body"].decode("utf-8", errors="replace").split("\n")[1:-1]
-        (OUT / "landmark_middle.csv").write_text("\n".join(mid_lines) + "\n", encoding="utf-8")
+        (OUT / "landmark_middle.csv").write_text("\n".join(lines[:1] + mid_lines) + "\n", encoding="utf-8",
+                                                 newline="")
         print(f"middle probe: status {mid['status']}, {len(mid_lines)} complete rows")
 
     (OUT / "probe_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

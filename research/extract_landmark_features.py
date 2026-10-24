@@ -37,6 +37,13 @@ OUT = ROOT / "research" / "data" / "video_features.csv"
 ID_COLS = ("Video_Name", "Frame", "Class")
 N_FACE, N_IRIS, N_POSE = 468, 10, 33
 
+# MediaPipe's canonical face (Apache 2.0), used to reject frames where FaceMesh lost the face.
+MESH_URL = ("https://raw.githubusercontent.com/google-ai-edge/mediapipe/master/"
+            "mediapipe/modules/face_geometry/data/canonical_face_model.obj")
+MESH_PATH = ROOT / "research" / "data" / "canonical_face_model.obj"
+FRAME_ASPECT = 9 / 16   # height / width of the I3D videos (1920x1080); best fit of every one sampled
+MAX_MESH_ERROR = 0.10   # sampled clean frames sit at 0.05-0.08, lost-face frames at 0.12-0.18
+
 
 # ---- column mapping -----------------------------------------------------------------------------
 
@@ -70,7 +77,10 @@ def resolve_columns(header: list[str], positional: str = "auto") -> tuple[dict, 
     if positional == "never":
         missing = [lm for lm, (x, y) in by_name.items() if x is None or y is None]
         raise SystemExit(f"could not find landmark columns by name for {missing[:5]}...; header starts {hdr[:12]}")
-    coords = [i for i, h in enumerate(hdr) if h not in ID_COLS]
+    # Coordinate columns only: the I3D file also carries metadata (ethnic_group, ethnic_key). Its face
+    # columns have descriptive names (Contour_Chin, Left_Eye_Upper_0, ...) but are in MediaPipe index
+    # order: matching them blind against the canonical face mesh recovered that order (research/README.md).
+    coords = [i for i, h in enumerate(hdr) if h[-2:] in ("_X", "_Y", "_Z")]
     expected = 3 * (N_FACE + N_IRIS + N_POSE)
     if len(coords) != expected:
         raise SystemExit(f"{len(coords)} coordinate columns, expected {expected} for positional mapping; "
@@ -80,13 +90,64 @@ def resolve_columns(header: list[str], positional: str = "auto") -> tuple[dict, 
     return ids, mapping, "by position (face, iris, pose; x,y,z each)"
 
 
+def load_canonical_mesh() -> np.ndarray:
+    """468 x 3 canonical face, centred, in image orientation (y down, z away from the camera)."""
+    if not MESH_PATH.exists():
+        MESH_PATH.parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(MESH_URL, headers={"User-Agent": "tilt-oxhack-research/1.0"})
+        MESH_PATH.write_bytes(urllib.request.urlopen(req, timeout=60).read())
+    v = [[float(t) for t in line.split()[1:4]] for line in MESH_PATH.read_text().splitlines() if line.startswith("v ")]
+    mesh = np.array(v) * [1, -1, -1]
+    if mesh.shape != (N_FACE, 3):
+        raise SystemExit(f"unexpected canonical mesh shape {mesh.shape}")
+    return mesh - mesh.mean(0)
+
+
+def mesh_error(face: np.ndarray, mesh: np.ndarray) -> float:
+    """How far one frame's 468 points are from a rotated, scaled canonical face (0 = perfect).
+
+    MediaPipe FaceMesh always returns 468 points, even when it has lost the face; on the sideways
+    I3D videos it often does, and the points then jump to a distorted shape. A similarity fit to the
+    canonical face separates the two cleanly. Expressions and head turns stay well under the cut.
+    """
+    p = face * [1, FRAME_ASPECT, 1]
+    p = p - p.mean(0)
+    u, s, vt = np.linalg.svd(mesh.T @ p)
+    d = np.sign(np.linalg.det(u @ vt))
+    r = u @ np.diag([1, 1, d]) @ vt
+    scale = (s * [1, 1, d]).sum() / (mesh ** 2).sum()
+    spread = (p ** 2).sum()
+    if spread <= 0:
+        return float("inf")
+    return float(np.sqrt(((p - scale * mesh @ r) ** 2).sum() / spread))
+
+
+def upright(points: dict[int, tuple[float, float]]) -> tuple[dict[int, tuple[float, float]], str]:
+    """Rotate a frame so the face is upright, as a webcam frame would be.
+
+    Many I3D recordings are phone videos whose rotation flag was ignored when the landmarks were
+    extracted, so the face lies on its side (forehead-to-chin along image x). Features compare x with
+    x and y with y, so they are only meaningful once the face is the right way up. The rotation is
+    decided per frame from the forehead-to-chin direction; quarter turns keep coordinates in [0, 1].
+    """
+    dx = points[152][0] - points[10][0]
+    dy = points[152][1] - points[10][1]
+    if abs(dy) >= abs(dx):
+        if dy > 0:
+            return points, "upright"
+        return {k: (1 - x, 1 - y) for k, (x, y) in points.items()}, "upside_down"
+    if dx > 0:
+        return {k: (1 - y, x) for k, (x, y) in points.items()}, "chin_right"
+    return {k: (y, 1 - x) for k, (x, y) in points.items()}, "chin_left"
+
+
 def geometry_ok(points: dict[int, tuple[float, float]]) -> bool:
     """Sanity check that the mapping is right: a face that is the right way up and the right way round."""
     x = {k: v[0] for k, v in points.items()}
     y = {k: v[1] for k, v in points.items()}
     return (y[10] < y[1] < y[152]                      # forehead above nose above chin
             and y[105] < y[159] and y[334] < y[386]    # brows above eyes
-            and y[13] <= y[14]                         # upper lip above lower lip
+            and y[13] <= y[14] + 0.02 * (y[152] - y[10])  # upper lip not below lower (they touch when closed)
             and min(x[33], x[263]) < x[1] < max(x[33], x[263]))  # nose between outer eye corners
 
 
@@ -120,14 +181,23 @@ def run(source: str, out: Path, participant_regex: str | None, max_bytes: int | 
     header = next(reader)
     ids, cols, how = resolve_columns(header, positional)
     print(f"{len(header)} columns; landmark columns resolved {how}")
+    coords = [i for i, h in enumerate(header) if h.strip()[-2:] in ("_X", "_Y", "_Z")]
+    face_cols = coords[:3 * N_FACE] if len(coords) >= 3 * N_FACE else None
+    mesh = load_canonical_mesh() if face_cols else None
+    if face_cols is None:
+        print("no full face mesh in this file; frames are not quality-checked")
 
     frames: dict[str, list] = defaultdict(list)
     label: dict[str, int] = {}
-    bad_geometry = rows = 0
+    bad_geometry = bad_mesh = rows = 0
+    orientation: dict[str, int] = defaultdict(int)
+    frames_seen: dict[str, int] = defaultdict(int)
     read_bytes = len(",".join(header))
     t0 = last = time.time()
     partial = False
     for row in reader:
+        if not row:
+            continue
         if len(row) != len(header):
             break  # truncated final line of a partial download
         rows += 1
@@ -142,6 +212,17 @@ def run(source: str, out: Path, participant_regex: str | None, max_bytes: int | 
             continue  # face not detected in this frame (empty cells)
         if any(v != v for xy in pts.values() for v in xy):
             continue
+        frames_seen[video] += 1
+        if face_cols:
+            try:
+                face = np.array([float(row[c]) for c in face_cols]).reshape(N_FACE, 3)
+            except ValueError:
+                continue
+            if not mesh_error(face, mesh) <= MAX_MESH_ERROR:
+                bad_mesh += 1
+                continue
+        pts, turn = upright(pts)
+        orientation[turn] += 1
         if not geometry_ok(pts):
             bad_geometry += 1
             continue
@@ -156,12 +237,16 @@ def run(source: str, out: Path, participant_regex: str | None, max_bytes: int | 
             break
     stream.close()
 
-    usable = rows - bad_geometry
-    summary = {"source": source, "column_mapping": how, "frames_read": rows, "frames_failing_geometry": bad_geometry,
-               "recordings": len(label), "partial_read": partial, "bytes_read": read_bytes}
+    usable = rows - bad_mesh - bad_geometry
+    summary = {"source": source, "column_mapping": how, "frames_read": rows, "frames_failing_mesh": bad_mesh,
+               "max_mesh_error": MAX_MESH_ERROR, "frames_failing_geometry": bad_geometry,
+               "frame_orientation": dict(orientation), "recordings": len(label), "partial_read": partial,
+               "bytes_read": read_bytes}
     print(json.dumps(summary, indent=2))
     if check:
-        ok = rows > 0 and bad_geometry / max(rows, 1) < 0.05
+        # Frames that pass the mesh check must also be the right way up and round; lost-face frames
+        # were already set aside, so this tests the column mapping on its own.
+        ok = rows - bad_mesh > 0 and bad_geometry / max(rows - bad_mesh, 1) < 0.05
         print("Column mapping looks right." if ok else "Column mapping looks WRONG: most frames fail the face-geometry check.")
         sample = sorted(label)[:10]
         print("Example video names:", sample)
@@ -172,11 +257,11 @@ def run(source: str, out: Path, participant_regex: str | None, max_bytes: int | 
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["video", "participant", "label", *ALL_WINDOW_FEATURES, "frames"])
+        w.writerow(["video", "participant", "label", *ALL_WINDOW_FEATURES, "frames", "frames_seen"])
         for video in sorted(label):
             feats = window_features(frames.get(video, []))
             w.writerow([video, participant_of(video, participant_regex), label[video],
-                        *[feats[k] for k in ALL_WINDOW_FEATURES], int(feats["frames"])])
+                        *[feats[k] for k in ALL_WINDOW_FEATURES], int(feats["frames"]), frames_seen[video]])
     (out.with_suffix(".meta.json")).write_text(json.dumps(summary, indent=2))
     print(f"wrote {out}" + ("  (PARTIAL: biased subset, do not report as results)" if partial else ""))
     return summary
