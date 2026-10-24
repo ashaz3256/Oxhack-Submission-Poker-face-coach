@@ -36,13 +36,19 @@ class OnlineLogit:
             self._pipe = make_pipeline(StandardScaler(), LogisticRegression(C=0.5))
             self._pipe.fit(np.array(self.X), np.array(self.y))
 
-    def predict(self, x: list[float]) -> float:
+    def prior(self, offset: float = 0.0) -> float:
+        """Base rate, optionally shifted by a log-odds offset from a pretrained model."""
+        b = min(max(self.base_rate(), 1e-6), 1 - 1e-6)
+        return float(1 / (1 + np.exp(-(np.log(b / (1 - b)) + offset))))
+
+    def predict(self, x: list[float], prior_offset: float = 0.0) -> float:
+        prior = self.prior(prior_offset)
         if self._pipe is None:
-            return self.base_rate()
+            return prior
         p = float(self._pipe.predict_proba(np.array([x]))[0, 1])
-        # Shrink toward the base rate while the model has little data.
+        # Shrink toward the prior while the model has little data.
         w = len(self.y) / (len(self.y) + self.prior_weight)
-        return w * p + (1 - w) * self.base_rate()
+        return w * p + (1 - w) * prior
 
     def contributions(self, x: list[float]) -> dict[str, float]:
         """How much each feature pushed this prediction, in log-odds."""

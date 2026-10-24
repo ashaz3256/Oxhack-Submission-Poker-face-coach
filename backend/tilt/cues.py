@@ -25,7 +25,9 @@ RAW = {
     "rr": 2.0,            # breathing rate from Presage, breaths per minute
 }
 TEXT = ["hedges", "fillers", "negations", "log_words"]
-LIE_FEATURES = [f"{k}_z" for k in RAW] + TEXT
+# Log-odds from the face model trained on the published I3D dataset (0 when no model is installed).
+FACE_SCORE = "i3d_face"
+LIE_FEATURES = [f"{k}_z" for k in RAW] + TEXT + [FACE_SCORE]
 
 LABELS = {
     "pitch_z": "voice pitch", "pitch_var_z": "pitch wobble", "loudness_z": "loudness", "rate_z": "talking speed",
@@ -33,6 +35,7 @@ LABELS = {
     "brow_down_z": "frowning", "lip_press_z": "pressed lips", "gaze_away_z": "looking away",
     "head_motion_z": "head movement", "smile_z": "smiling", "hr_z": "heart rate", "rr_z": "breathing rate", "hedges": "hedging words",
     "fillers": "ums and ahs", "negations": "denials", "log_words": "answer length", "llm": "what you said",
+    "i3d_face": "face (dataset-trained)",
 }
 
 FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hmm", "like"}
@@ -96,6 +99,8 @@ def describe(name: str, value: float) -> str:
     label = LABELS.get(name, name)
     if name == "llm":
         return "suspicious wording"
+    if name == "i3d_face":
+        return f"{label} {'+' if value >= 0 else '-'}{abs(value):.1f} log-odds"
     if name.endswith("_z"):
         return f"{label} {'up' if value > 0 else 'down'} {abs(value):.1f}σ"
     return label

@@ -23,7 +23,8 @@ import uuid
 from dataclasses import dataclass, field
 
 from . import dialogue
-from .cues import describe
+from .cues import FACE_SCORE, describe
+from .face_model import FaceScorer
 from .language import find_names, last_name, parse_number, wants_again
 from .liemodel import LieModel
 from .presage import PresageVitals
@@ -102,6 +103,8 @@ class MafiaSession:
         self.clock = clock
         self.rng = random.Random(seed)
         self.model = LieModel()
+        self.face = FaceScorer()
+        self.face_frames: list[list[float]] | None = None  # this turn's per-frame face primitives, set by the API
         self.utterances: list[Utterance] = []
         self.votes: list[DayVote] = []
         self.games: list[Game] = []
@@ -139,7 +142,7 @@ class MafiaSession:
     def calibrate(self, transcript: str, raw: dict, is_lie: bool = False, question: str = "") -> dict:
         """Practice round before the game: honest answers set your baseline, instructed lies teach the
         detector what *your* lying looks like."""
-        raw = self._with_vitals(raw)
+        raw = self._with_face(self._with_vitals(raw))
         llm = dialogue.judge_lie(question, transcript, []) if transcript else None
         p, contrib, f = self.model.predict(raw, transcript, llm)
         u = Utterance(game=0, day=0, t=self.clock(), kind="calibration", question=question, transcript=transcript,
@@ -281,8 +284,17 @@ class MafiaSession:
             self._say(NARRATOR, "Okay, time to vote. Say the name of who you want out.")
             self._await("vote", "Say a name: " + ", ".join(game.living(exclude=YOU)))
 
+    def _with_face(self, raw: dict) -> dict:
+        """Attach this turn's dataset-trained face score to the measurements the lie model stores."""
+        score, _ = self.face.score(self._take_face_frames())
+        return {**raw, FACE_SCORE: score}
+
+    def _take_face_frames(self) -> list[list[float]] | None:
+        frames, self.face_frames = self.face_frames, None
+        return frames
+
     def _analyse(self, game: Game, question: str, transcript: str, raw: dict) -> dict:
-        raw = self._with_vitals(raw)
+        raw = self._with_face(self._with_vitals(raw))
         recent = [f"{l['speaker']}: {l['text']}" for l in self.chat[-10:]]
         llm = dialogue.judge_lie(question, transcript, recent)
         p, contrib, f = self.model.predict(raw, transcript, llm)

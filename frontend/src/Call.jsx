@@ -205,9 +205,9 @@ export default function Call({ dev }) {
           silentFails.current = 0
         }
         setListening(null)
-        if (!measure) return { transcript, raw: {} }
+        if (!measure) return { transcript, raw: {}, faceFrames: null }
         const raw = { ...(voice.current?.endTurn(transcript) ?? {}), ...faceRaw }
-        return { transcript, raw }
+        return { transcript, raw, faceFrames: face.current?.lastFrames ?? null }
       }
     }
 
@@ -300,8 +300,8 @@ export default function Call({ dev }) {
       for (const [i, q] of PRACTICE.entries()) {
         setPractice({ round: i + 1, of: PRACTICE.length, lie: q.lie, result: null })
         await speakLines([{ speaker: 'Narrator', text: q.text }], {})
-        const { transcript, raw } = await hear('calibrate')
-        last = await api.calibrate(sid.current, transcript, raw, q.lie, q.text)
+        const { transcript, raw, faceFrames } = await hear('calibrate')
+        last = await api.calibrate(sid.current, transcript, raw, q.lie, q.text, faceFrames)
         setRead({ p_lie: last.p_lie, cues: last.cues })
         setPractice({ round: i + 1, of: PRACTICE.length, lie: q.lie, result: last })
         await sleep(1600)
@@ -336,8 +336,8 @@ export default function Call({ dev }) {
           }
           await speakLines([{ speaker: 'Narrator', text: "Have a look at your breakdown. Say 'play again' when you're ready." }], state)
         }
-        const { transcript, raw } = await hear(awaiting.kind)
-        state = await api.speak(sid.current, transcript, raw)
+        const { transcript, raw, faceFrames } = await hear(awaiting.kind)
+        state = await api.speak(sid.current, transcript, raw, faceFrames)
         if (state.game?.awaiting?.kind !== 'again') setShowReport(false)
       }
     }

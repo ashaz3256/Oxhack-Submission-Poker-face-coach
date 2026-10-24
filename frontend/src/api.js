@@ -17,9 +17,10 @@ async function transcribe(blob) {
 export const api = {
   transcribe,
   create: () => call('POST', '/sessions', {}),
-  calibrate: (sid, transcript, raw, isLie, question) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw, is_lie: isLie, question }),
+  calibrate: (sid, transcript, raw, isLie, question, face_frames = null) => call('POST', `/sessions/${sid}/calibrate`, { transcript, raw, is_lie: isLie, question, face_frames }),
   newGame: (sid) => call('POST', `/sessions/${sid}/games`),
-  speak: (sid, transcript, raw) => call('POST', `/sessions/${sid}/speak`, { transcript, raw }),
+  speak: (sid, transcript, raw, face_frames = null) => call('POST', `/sessions/${sid}/speak`, { transcript, raw, face_frames }),
+  faceModel: () => call('GET', '/face-model'),
   report: (sid) => call('GET', `/sessions/${sid}/report`),
   breakdown: (sid, game) => call('GET', `/sessions/${sid}/breakdown${game ? `?game=${game}` : ''}`),
   review: (sid) => call('POST', `/sessions/${sid}/review`),

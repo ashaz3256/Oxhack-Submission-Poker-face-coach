@@ -2,6 +2,7 @@
 // Per answer we summarise blinks, gaze, brows, lips, smile and head movement, and we keep a
 // webcam pulse estimate (rPPG) from the green channel of the forehead.
 import { DrawingUtils, FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
+import { framePrimitives } from './faceFrame.js'
 
 const FPS_TARGET = 20
 const PULSE_WINDOW_S = 12
@@ -158,6 +159,8 @@ export class FaceScanner {
       for (const k of ['brow_raise', 'brow_down', 'lip_press', 'gaze_away', 'smile']) t.sum[k] += f[k]
       if (blinked) t.blinks++
       t.nose.push([lm[1].x, lm[1].y])
+      // Same per-frame measurements as the dataset-trained model saw (see faceFrame.js).
+      if (lm.length >= 478) t.prims.push(framePrimitives(lm).map((v) => (Number.isFinite(v) ? +v.toFixed(5) : null)))
     }
 
     // Pulse: mean green of a forehead patch, sized to the face.
@@ -190,12 +193,13 @@ export class FaceScanner {
   }
 
   beginTurn() {
-    this.turn = { start: performance.now(), frames: 0, blinks: 0, nose: [], sum: { brow_raise: 0, brow_down: 0, lip_press: 0, gaze_away: 0, smile: 0 } }
+    this.turn = { start: performance.now(), frames: 0, blinks: 0, nose: [], prims: [], sum: { brow_raise: 0, brow_down: 0, lip_press: 0, gaze_away: 0, smile: 0 } }
   }
 
   endTurn() {
     const t = this.turn
     this.turn = null
+    this.lastFrames = t?.prims ?? null
     if (!t || t.frames < 5) return { hr: this.live.hr }
     const minutes = (performance.now() - t.start) / 60000
     const mean = (k) => t.sum[k] / t.frames

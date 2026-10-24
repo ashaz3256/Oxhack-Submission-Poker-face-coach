@@ -25,6 +25,8 @@ PRIOR = {
     "blink_z": 0.15, "brow_raise_z": 0.1, "brow_down_z": 0.05, "lip_press_z": 0.3, "gaze_away_z": 0.15,
     "head_motion_z": -0.1, "smile_z": -0.05, "hr_z": 0.25, "rr_z": 0.2,
     "hedges": 0.35, "fillers": 0.25, "negations": 0.25, "log_words": -0.2, "llm": 0.9,
+    # Log-odds from the face model trained on the I3D dataset (research/); 0 when none is installed.
+    "i3d_face": 1.0,
 }
 # Word cues are rates per word; scale them so one unit is a meaningful change.
 SCALE = {"hedges": 12.0, "fillers": 12.0, "negations": 8.0, "log_words": 1.0}
@@ -53,6 +55,7 @@ class LieModel:
     # ---- data ---------------------------------------------------------------------------------
     def features(self, raw: dict, transcript: str, llm: float | None) -> dict:
         f = feature_dict(self.baseline, raw, transcript)
+        f["i3d_face"] = float(raw.get("i3d_face") or 0.0)
         f["llm"] = 0.0 if llm is None else math.log(max(llm, 0.02) / max(1 - llm, 0.02))
         return f
 

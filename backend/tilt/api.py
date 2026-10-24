@@ -35,6 +35,8 @@ class Said(BaseModel):
     raw: dict[str, float | None] = Field(default_factory=dict)
     is_lie: bool = False      # practice round only: were you told to lie?
     question: str = ""
+    # Per-frame face primitives for this turn (frontend/src/sensors/faceFrame.js), for the dataset-trained model.
+    face_frames: list[list[float | None]] | None = Field(None, max_length=6000)
 
 
 class Speech(BaseModel):
@@ -74,6 +76,7 @@ def create(body: NewSession) -> dict:
 @app.post("/api/sessions/{sid}/calibrate")
 def calibrate(sid: str, body: Said) -> dict:
     s = _session(sid)
+    s.face_frames = body.face_frames
     out = s.calibrate(body.transcript, body.raw, is_lie=body.is_lie, question=body.question)
     store.save(s)
     return out
@@ -88,7 +91,20 @@ def new_game(sid: str) -> dict:
 @app.post("/api/sessions/{sid}/speak")
 def speak(sid: str, body: Said) -> dict:
     s = _session(sid)
-    return _step(s, lambda: s.speak(body.transcript, body.raw))
+    def turn():
+        s.face_frames = body.face_frames
+        try:
+            s.speak(body.transcript, body.raw)
+        finally:
+            s.face_frames = None  # frames belong to this turn only, used or not
+    return _step(s, turn)
+
+
+@app.get("/api/face-model")
+def face_model_status() -> dict:
+    """Whether a dataset-trained face model is installed, and how it scored on held-out participants."""
+    from .face_model import FaceScorer
+    return FaceScorer().status()
 
 
 @app.get("/api/sessions/{sid}/report")

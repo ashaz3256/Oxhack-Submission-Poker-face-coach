@@ -53,6 +53,13 @@ export default function Report({ sessionId, refreshKey }) {
         <div className="tile"><b>{r.lies}/{r.answers}</b><span>answers that were lies</span></div>
         <div className="tile"><b>{r.mafia_wins}/{r.games_as_mafia}</b><span>games won as mafia</span></div>
       </div>
+      {r.face_model && (
+        <p className="hint">
+          {r.face_model.trained
+            ? `Face model trained on ${r.face_model.participants} people from the I3D deception dataset (Rahayu et al., CC BY 4.0): held-out AUC ${r.face_model.auc.toFixed(2)} [95% CI ${r.face_model.auc_95ci[0].toFixed(2)}–${r.face_model.auc_95ci[1].toFixed(2)}], split by participant.`
+            : 'Demonstration mode: no dataset-trained face model installed, so the face score is 0 and only your own live data is used.'}
+        </p>
+      )}
       <h3>Every answer, as the detector read it</h3>
       <Timeline rows={r.timeline} />
       <h3>What gives you away</h3>
