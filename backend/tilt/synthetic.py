@@ -44,13 +44,14 @@ def raw_features(rng: random.Random, lying: bool, leakiness: float) -> dict:
 
 
 def play(n_games: int = 12, leakiness: float = 1.0, seed: int = 7, mafia_rate: float = 0.5,
-         same_words: bool = False) -> MafiaSession:
-    """`same_words` makes liars and truth-tellers say the same things (a placebo for word cues)."""
+         same_words: bool = False, warmup: int = 6) -> MafiaSession:
+    """`same_words` makes liars and truth-tellers say the same things (a placebo for word cues).
+    `warmup` is how many practice answers come first (alternating truth, lie)."""
     clock = FakeClock()
     rng = random.Random(seed)
     s = MafiaSession(seed=seed, clock=clock, mafia_rate=mafia_rate)
     lying_bank = TRUTHFUL if same_words else LYING
-    for i in range(6):
+    for i in range(warmup):
         lie = i % 2 == 1  # practice round: truth, lie, truth, lie, truth, lie
         text = rng.choice(lying_bank if lie else TRUTHFUL)
         s.calibrate(text, raw_features(rng, lie, leakiness), is_lie=lie)

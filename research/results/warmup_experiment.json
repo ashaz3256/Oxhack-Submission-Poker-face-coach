@@ -1,0 +1,260 @@
+{
+  "sessions": 60,
+  "games_per_session": 4,
+  "arms": [
+    0,
+    2,
+    4,
+    6
+  ],
+  "by_condition": {
+    "words=scripted, leakiness=0.5": {
+      "0": {
+        "auc_first_game": 0.8167967298402081,
+        "auc_first_game_95ci": [
+          0.7568287111082678,
+          0.8678674680462568
+        ],
+        "auc_all_games": 0.6359389598255996,
+        "auc_all_games_95ci": [
+          0.5705995645998159,
+          0.6931104214119495
+        ],
+        "mafia_caught_rate": 0.33076923076923076,
+        "mafia_games": 130,
+        "answers_first_game": 216
+      },
+      "2": {
+        "auc_first_game": 0.8903149266609145,
+        "auc_first_game_95ci": [
+          0.817486911601186,
+          0.9443738171453925
+        ],
+        "auc_all_games": 0.784432691011993,
+        "auc_all_games_95ci": [
+          0.7423061059326996,
+          0.8247441858847667
+        ],
+        "mafia_caught_rate": 0.6183206106870229,
+        "mafia_games": 131,
+        "answers_first_game": 198
+      },
+      "4": {
+        "auc_first_game": 0.937176445211389,
+        "auc_first_game_95ci": [
+          0.9073736909388093,
+          0.9656436764989396
+        ],
+        "auc_all_games": 0.8397135785007073,
+        "auc_all_games_95ci": [
+          0.8052293748643459,
+          0.8702169781200418
+        ],
+        "mafia_caught_rate": 0.6814814814814815,
+        "mafia_games": 135,
+        "answers_first_game": 198
+      },
+      "6": {
+        "auc_first_game": 0.8947056030389364,
+        "auc_first_game_95ci": [
+          0.8387203353563648,
+          0.9420635253214762
+        ],
+        "auc_all_games": 0.8760988660975919,
+        "auc_all_games_95ci": [
+          0.8358807741380174,
+          0.9115987039077008
+        ],
+        "mafia_caught_rate": 0.8031496062992126,
+        "mafia_games": 127,
+        "answers_first_game": 186
+      }
+    },
+    "words=scripted, leakiness=1.0": {
+      "0": {
+        "auc_first_game": 0.8167967298402081,
+        "auc_first_game_95ci": [
+          0.7605003257818764,
+          0.8696986179529282
+        ],
+        "auc_all_games": 0.6359389598255996,
+        "auc_all_games_95ci": [
+          0.5683107273863953,
+          0.6942835646482038
+        ],
+        "mafia_caught_rate": 0.33076923076923076,
+        "mafia_games": 130,
+        "answers_first_game": 216
+      },
+      "2": {
+        "auc_first_game": 0.9839566020313942,
+        "auc_first_game_95ci": [
+          0.9632861628076042,
+          0.9978067899958661
+        ],
+        "auc_all_games": 0.9370319274733936,
+        "auc_all_games_95ci": [
+          0.9157727717355508,
+          0.9569486085957805
+        ],
+        "mafia_caught_rate": 0.8248175182481752,
+        "mafia_games": 137,
+        "answers_first_game": 190
+      },
+      "4": {
+        "auc_first_game": 0.9943746729461015,
+        "auc_first_game_95ci": [
+          0.9864619538232374,
+          0.9996069336660643
+        ],
+        "auc_all_games": 0.9721390027681418,
+        "auc_all_games_95ci": [
+          0.9605608700324256,
+          0.9818678479990891
+        ],
+        "mafia_caught_rate": 0.9473684210526315,
+        "mafia_games": 133,
+        "answers_first_game": 176
+      },
+      "6": {
+        "auc_first_game": 0.993421052631579,
+        "auc_first_game_95ci": [
+          0.9827411421161422,
+          0.9996477856942974
+        ],
+        "auc_all_games": 0.9596449557387059,
+        "auc_all_games_95ci": [
+          0.9114794971879439,
+          0.9941595210708818
+        ],
+        "mafia_caught_rate": 0.9834710743801653,
+        "mafia_games": 121,
+        "answers_first_game": 158
+      }
+    },
+    "words=same, leakiness=0.5": {
+      "0": {
+        "auc_first_game": 0.4724264705882353,
+        "auc_first_game_95ci": [
+          0.38812118517958033,
+          0.5570637676366842
+        ],
+        "auc_all_games": 0.5659252749233821,
+        "auc_all_games_95ci": [
+          0.48378315979161574,
+          0.63772762388517
+        ],
+        "mafia_caught_rate": 0.42105263157894735,
+        "mafia_games": 133,
+        "answers_first_game": 214
+      },
+      "2": {
+        "auc_first_game": 0.7683543096872616,
+        "auc_first_game_95ci": [
+          0.6734341129175551,
+          0.8474900641025639
+        ],
+        "auc_all_games": 0.7057853043912176,
+        "auc_all_games_95ci": [
+          0.6631365014973977,
+          0.7454839757508839
+        ],
+        "mafia_caught_rate": 0.5294117647058824,
+        "mafia_games": 136,
+        "answers_first_game": 214
+      },
+      "4": {
+        "auc_first_game": 0.8279605263157895,
+        "auc_first_game_95ci": [
+          0.7636094572429387,
+          0.8877941735861208
+        ],
+        "auc_all_games": 0.7564391025641025,
+        "auc_all_games_95ci": [
+          0.718210506455696,
+          0.7937381881184795
+        ],
+        "mafia_caught_rate": 0.5833333333333334,
+        "mafia_games": 144,
+        "answers_first_game": 216
+      },
+      "6": {
+        "auc_first_game": 0.8358664185277089,
+        "auc_first_game_95ci": [
+          0.7661922952283122,
+          0.8971706459464117
+        ],
+        "auc_all_games": 0.8225974633980252,
+        "auc_all_games_95ci": [
+          0.7852436786482839,
+          0.855844713203742
+        ],
+        "mafia_caught_rate": 0.7709923664122137,
+        "mafia_games": 131,
+        "answers_first_game": 202
+      }
+    },
+    "words=same, leakiness=1.0": {
+      "0": {
+        "auc_first_game": 0.4724264705882353,
+        "auc_first_game_95ci": [
+          0.39114545167967263,
+          0.554925136811813
+        ],
+        "auc_all_games": 0.5659252749233821,
+        "auc_all_games_95ci": [
+          0.4870139051834255,
+          0.6365732265729921
+        ],
+        "mafia_caught_rate": 0.42105263157894735,
+        "mafia_games": 133,
+        "answers_first_game": 214
+      },
+      "2": {
+        "auc_first_game": 0.9649292149292149,
+        "auc_first_game_95ci": [
+          0.9277218191964287,
+          0.9891484364401032
+        ],
+        "auc_all_games": 0.8961828102453103,
+        "auc_all_games_95ci": [
+          0.871385684648225,
+          0.9200943855703836
+        ],
+        "mafia_caught_rate": 0.8296296296296296,
+        "mafia_games": 135,
+        "answers_first_game": 200
+      },
+      "4": {
+        "auc_first_game": 0.9847068328716528,
+        "auc_first_game_95ci": [
+          0.9703307331953165,
+          0.995585274721633
+        ],
+        "auc_all_games": 0.9598884842967683,
+        "auc_all_games_95ci": [
+          0.9470802983660827,
+          0.971602588239995
+        ],
+        "mafia_caught_rate": 0.9022556390977443,
+        "mafia_games": 133,
+        "answers_first_game": 190
+      },
+      "6": {
+        "auc_first_game": 0.98671875,
+        "auc_first_game_95ci": [
+          0.9697916666666666,
+          0.9972283367862637
+        ],
+        "auc_all_games": 0.9711966869763898,
+        "auc_all_games_95ci": [
+          0.9326498336879283,
+          0.9911735863362864
+        ],
+        "mafia_caught_rate": 0.9758064516129032,
+        "mafia_games": 124,
+        "answers_first_game": 160
+      }
+    }
+  }
+}

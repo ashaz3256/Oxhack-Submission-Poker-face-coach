@@ -11,74 +11,305 @@
       "same_words": true,
       "sessions": 60,
       "games": 600,
-      "mafia_days": 230,
-      "villager_days": 804,
-      "caught_reader": 0.18695652173913044,
+      "mafia_days": 219,
+      "villager_days": 803,
+      "caught_reader": 0.182648401826484,
       "caught_reader_95ci": [
-        0.13901033881415048,
-        0.2350490196078431
+        0.1415057295268201,
+        0.22084245391705062
       ],
-      "caught_blind": 0.20869565217391303,
+      "caught_blind": 0.2146118721461187,
       "caught_blind_95ci": [
-        0.16746303232371346,
-        0.24731715106994567
+        0.17624481816468815,
+        0.25
       ],
-      "caught_difference": -0.021739130434782594,
+      "caught_difference": -0.0319634703196347,
       "caught_difference_95ci": [
-        -0.05504684341471,
-        0.012713216732780397
+        -0.06191081517352704,
+        -0.004201241165922424
       ],
-      "framed_reader": 0.19527363184079602,
-      "framed_blind": 0.20149253731343283,
+      "framed_reader": 0.20174346201743462,
+      "framed_blind": 0.20423412204234123,
       "framed_reader_95ci": [
-        0.16967455110869575,
-        0.22324414199920634
+        0.17697876999238385,
+        0.22667307692307687
       ],
-      "town_win_rate": 0.45166666666666666,
-      "human_win_rate": 0.505,
-      "brier_reader": 0.17362589173025647,
+      "town_win_rate": 0.47333333333333333,
+      "human_win_rate": 0.5283333333333333,
+      "brier_reader": 0.17406505020375979,
       "brier_reader_95ci": [
-        0.17013399145018748,
-        0.17691615690274082
+        0.1705771570771809,
+        0.17757465714786816
       ],
-      "brier_blind": 0.17304554201549346,
-      "brier_uniform": 0.17177935179223014,
+      "brier_blind": 0.1724973494301076,
+      "brier_uniform": 0.17150394637258087,
       "reliability_reader": [
         {
           "bin": "0.00-0.10",
           "mean_p": 0.073,
-          "actual_rate": 0.124,
-          "n": 2215
+          "actual_rate": 0.136,
+          "n": 2163
         },
         {
           "bin": "0.10-0.20",
           "mean_p": 0.151,
-          "actual_rate": 0.19,
-          "n": 6066
+          "actual_rate": 0.184,
+          "n": 6030
         },
         {
           "bin": "0.20-0.35",
-          "mean_p": 0.26,
-          "actual_rate": 0.254,
-          "n": 4767
+          "mean_p": 0.259,
+          "actual_rate": 0.255,
+          "n": 4803
         },
         {
           "bin": "0.35-0.50",
-          "mean_p": 0.414,
-          "actual_rate": 0.323,
-          "n": 1622
+          "mean_p": 0.413,
+          "actual_rate": 0.324,
+          "n": 1610
         },
         {
           "bin": "0.50-0.70",
-          "mean_p": 0.576,
-          "actual_rate": 0.368,
-          "n": 759
+          "mean_p": 0.578,
+          "actual_rate": 0.364,
+          "n": 726
         },
         {
           "bin": "0.70-1.00",
-          "mean_p": 0.759,
-          "actual_rate": 0.574,
-          "n": 101
+          "mean_p": 0.761,
+          "actual_rate": 0.542,
+          "n": 83
+        }
+      ]
+    },
+    {
+      "leakiness": 0.5,
+      "mafia_rate": 0.1667,
+      "same_words": true,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 173,
+      "villager_days": 814,
+      "caught_reader": 0.5317919075144508,
+      "caught_reader_95ci": [
+        0.45864541928068575,
+        0.6039116956489837
+      ],
+      "caught_blind": 0.1676300578034682,
+      "caught_blind_95ci": [
+        0.11249815088757396,
+        0.21894934333958718
+      ],
+      "caught_difference": 0.36416184971098264,
+      "caught_difference_95ci": [
+        0.2711433066071247,
+        0.46592803030303015
+      ],
+      "framed_reader": 0.0773955773955774,
+      "framed_blind": 0.12285012285012285,
+      "framed_reader_95ci": [
+        0.062345500331840296,
+        0.09291021714036411
+      ],
+      "town_win_rate": 0.61,
+      "human_win_rate": 0.49666666666666665,
+      "brier_reader": 0.15465436347296316,
+      "brier_reader_95ci": [
+        0.14926183648907093,
+        0.15952330847969648
+      ],
+      "brier_blind": 0.17100042035982976,
+      "brier_uniform": 0.17029124925363237,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.059,
+          "actual_rate": 0.078,
+          "n": 3355
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.148,
+          "actual_rate": 0.168,
+          "n": 5247
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.261,
+          "actual_rate": 0.259,
+          "n": 3749
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.416,
+          "actual_rate": 0.376,
+          "n": 1538
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.582,
+          "actual_rate": 0.486,
+          "n": 867
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.79,
+          "actual_rate": 0.741,
+          "n": 317
+        }
+      ]
+    },
+    {
+      "leakiness": 1.0,
+      "mafia_rate": 0.1667,
+      "same_words": true,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 118,
+      "villager_days": 846,
+      "caught_reader": 0.8898305084745762,
+      "caught_reader_95ci": [
+        0.8108108108108109,
+        0.9553670195954488
+      ],
+      "caught_blind": 0.05084745762711865,
+      "caught_blind_95ci": [
+        0.008928571428571428,
+        0.10309482899689083
+      ],
+      "caught_difference": 0.8389830508474576,
+      "caught_difference_95ci": [
+        0.7217921853814865,
+        0.93182781201849
+      ],
+      "framed_reader": 0.010638297872340425,
+      "framed_blind": 0.07565011820330969,
+      "framed_reader_95ci": [
+        0.0047561013497674125,
+        0.017073935534110185
+      ],
+      "town_win_rate": 0.6266666666666667,
+      "human_win_rate": 0.46,
+      "brier_reader": 0.1322110828206585,
+      "brier_reader_95ci": [
+        0.12641558569967262,
+        0.137924484052844
+      ],
+      "brier_blind": 0.16961162381178624,
+      "brier_uniform": 0.16921185603933947,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.036,
+          "actual_rate": 0.038,
+          "n": 5137
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.148,
+          "actual_rate": 0.174,
+          "n": 3608
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.263,
+          "actual_rate": 0.285,
+          "n": 2963
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.417,
+          "actual_rate": 0.364,
+          "n": 1368
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.589,
+          "actual_rate": 0.499,
+          "n": 951
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.846,
+          "actual_rate": 0.83,
+          "n": 731
+        }
+      ]
+    },
+    {
+      "leakiness": 1.5,
+      "mafia_rate": 0.1667,
+      "same_words": true,
+      "sessions": 60,
+      "games": 600,
+      "mafia_days": 107,
+      "villager_days": 864,
+      "caught_reader": 0.9065420560747663,
+      "caught_reader_95ci": [
+        0.806987736331119,
+        0.9823008849557522
+      ],
+      "caught_blind": 0.056074766355140186,
+      "caught_blind_95ci": [
+        0.010632757092198582,
+        0.11215191684150294
+      ],
+      "caught_difference": 0.8504672897196262,
+      "caught_difference_95ci": [
+        0.7128712871287128,
+        0.9647261663286003
+      ],
+      "framed_reader": 0.005787037037037037,
+      "framed_blind": 0.0763888888888889,
+      "framed_reader_95ci": [
+        0.0011507149187201565,
+        0.012472363945578229
+      ],
+      "town_win_rate": 0.62,
+      "human_win_rate": 0.4666666666666667,
+      "brier_reader": 0.1309611806849448,
+      "brier_reader_95ci": [
+        0.12425898219593193,
+        0.13764774004881045
+      ],
+      "brier_blind": 0.16980805138798055,
+      "brier_uniform": 0.1689835125517453,
+      "reliability_reader": [
+        {
+          "bin": "0.00-0.10",
+          "mean_p": 0.027,
+          "actual_rate": 0.034,
+          "n": 5450
+        },
+        {
+          "bin": "0.10-0.20",
+          "mean_p": 0.15,
+          "actual_rate": 0.197,
+          "n": 3223
+        },
+        {
+          "bin": "0.20-0.35",
+          "mean_p": 0.264,
+          "actual_rate": 0.28,
+          "n": 2948
+        },
+        {
+          "bin": "0.35-0.50",
+          "mean_p": 0.417,
+          "actual_rate": 0.344,
+          "n": 1344
+        },
+        {
+          "bin": "0.50-0.70",
+          "mean_p": 0.588,
+          "actual_rate": 0.485,
+          "n": 971
+        },
+        {
+          "bin": "0.70-1.00",
+          "mean_p": 0.871,
+          "actual_rate": 0.825,
+          "n": 815
         }
       ]
     }
