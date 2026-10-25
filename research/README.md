@@ -150,20 +150,20 @@ town framing innocent players on pure noise.
 ## Evidence (simulated players, `research/simulate_town.py`)
 
 The simulated player (`backend/tilt/synthetic.py`) shifts face and voice when lying by
-`leakiness`. Dealing is the game's own: you are the mafia half the time. 60 sessions × 10 games
-per row; intervals bootstrap over sessions. **These are simulated players: the numbers test the
+`leakiness`. Dealing is the game's own: you are the mafia half the time, after the game's four-answer
+warm-up. 60 sessions × 10 games per row; intervals bootstrap over sessions. **These are simulated players: the numbers test the
 reasoning, not how well real people can be read.**
 
 | Simulated player | Caught as mafia: Reader | Blind | Difference (95% CI) | Innocent voted out: Reader | Blind | Brier: Reader | Blind | Guessing |
 |---|---|---|---|---|---|---|---|---|
-| Placebo (no tells at all) | 24% | 23% | +1 pts [0, +2] | 23% | 21% | 0.176 | 0.176 | 0.173 |
-| Leakiness 0.0 | 32% | 20% | +12 pts [+8, +17] | 21% | 22% | 0.169 | 0.176 | 0.172 |
-| Leakiness 0.5 | 78% | 11% | +67 pts [+61, +73] | 7% | 10% | 0.120 | 0.170 | 0.167 |
-| Leakiness 1.0 | 95% | 9% | +86 pts [+79, +91] | 1% | 6% | 0.090 | 0.167 | 0.166 |
-| Leakiness 1.5 | 91% | 10% | +81 pts [+73, +89] | 1% | 6% | 0.087 | 0.168 | 0.165 |
+| Placebo (no tells at all) | 23% | 22% | +2 pts [0, +3] | 21% | 21% | 0.174 | 0.175 | 0.173 |
+| Leakiness 0.0 | 30% | 17% | +14 pts [+9, +19] | 20% | 19% | 0.167 | 0.175 | 0.172 |
+| Leakiness 0.5 | 67% | 15% | +51 pts [+45, +58] | 7% | 10% | 0.131 | 0.169 | 0.168 |
+| Leakiness 1.0 | 94% | 9% | +85 pts [+80, +90] | 2% | 8% | 0.103 | 0.168 | 0.166 |
+| Leakiness 1.5 | 100% | 9% | +91 pts [+88, +94] | 0% | 6% | 0.086 | 0.165 | 0.166 |
 
 The placebo makes liars and truth-tellers identical in body and words: the Reader town must do
-no better than the Blind one, and it doesn't (with fair 1-in-6 dealing too: 18% vs 21%). At
+no better than the Blind one: it is within two points (23% vs 22%, and innocents are voted out equally often), and with fair 1-in-6 dealing it is level (17% vs 19%). At
 leakiness 0 the simulated liar's words still differ (more hedges and fillers), which is why the
 Reader still gains a little there. Files: `results/town_eval_game_deal.json`,
 `town_eval_placebo_game_deal.json`, `town_eval_fair_deal.json`, `town_eval_placebo.json`.
@@ -172,12 +172,12 @@ Calibration of every villager's beliefs at every vote (leakiness 1):
 
 | Bots said | It was the mafia | Beliefs |
 |---|---|---|
-| 3% | 2% | 7,152 |
-| 15% | 15% | 2,724 |
-| 26% | 27% | 2,002 |
-| 42% | 39% | 891 |
-| 60% | 61% | 820 |
-| 88% | 95% | 1,308 |
+| 5% | 2% | 5,796 |
+| 14% | 12% | 3,677 |
+| 26% | 27% | 2,548 |
+| 42% | 48% | 1,095 |
+| 59% | 67% | 883 |
+| 83% | 93% | 883 |
 
 ### A leak we found and fixed
 
@@ -191,10 +191,11 @@ only counts earlier games and the warm-up. After the fix that player reads at ch
 fails if it comes back. Every number in this section was measured after the fix.
 
 Before vs after (`research/compare_bots.py`, the bots on `main` before this work vs this town,
-same simulated players): in the placebo the old bots voted out an innocent human 42% of the time
-against 11% for their blind version, so the old report would tell a perfect poker face that their
-body gave them away; this town is 23% vs 21%. With a real tell (leakiness 1) both catch the mafia
-(99% old, 95% new), and the human wins less against this town (28% vs 38%).
+same simulated players; the old bots keep their six-answer warm-up, which only helps them): in the
+placebo the old bots voted out an innocent human 42% of the time against 11% for their blind
+version, so the old report would tell a perfect poker face that their body gave them away; this
+town is 21% vs 21%. With a real tell (leakiness 1) both catch the mafia (99% old, 94% new), and
+the human wins less against this town (32% vs 38%).
 
 ## Why the warm-up (`research/warmup_experiment.py`)
 
@@ -216,4 +217,4 @@ keep the start short.
 
 Known gaps: the bots assume fair dealing, but the game deals you the mafia half the time to
 collect lie data; the gut-feeling strength (`HUNCH`) and accusation model (`ACCUSE_HIT`) are
-assumptions; and the top belief band is slightly underconfident (88% said, 95% actual).
+assumptions; and above 40% the bots are underconfident (59% said, 67% actual; 83% said, 93% actual), so they hold back on votes they could make.

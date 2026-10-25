@@ -30,8 +30,6 @@ const PRACTICE = [
   { lie: false, text: "Hey, welcome to Tilt. Quick warm-up so the detector can learn you. First, the truth: tell me about your day so far." },
   { lie: true, text: "Nice. Now lie to me. Tell me what you had for breakfast, but make it up. Sell it." },
   { lie: false, text: "Okay, truth again. What's a film you really like, and why?" },
-  { lie: true, text: "Lie this time. Tell me about a country you've never been to, like you've been there." },
-  { lie: false, text: "Truth. What did you do last weekend?" },
   { lie: true, text: "Last one, a lie. Tell me about a famous person you've met. You haven't. Convince me." },
 ]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
