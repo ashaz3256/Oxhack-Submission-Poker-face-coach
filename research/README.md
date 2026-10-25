@@ -52,6 +52,12 @@ produced a model trained on the wrong numbers.
 Dropping frames is only safe if it doesn't depend on truth or lie. The trainer reports the share of
 clean frames and the usable recordings for each label (`selection` in `face_model_eval.json`).
 
+Over the whole file (647,871 frames, 1,568 recordings, 196 people): 59% of frames failed the mesh
+check, 99% of clean frames were rotated (262,099 chin-right, 2,351 upright, 669 chin-left), and
+only 325 clean frames (0.1%) failed the geometry check. The filter is label-neutral: 39.1% of
+frames survive in truthful recordings and 38.4% in deceptive ones. 1,189 recordings from 172
+people keep at least 10 clean frames with both a truth and a lie left per person.
+
 ## Features (`backend/tilt/face_features.py`)
 
 Computed per frame from landmarks, then summarised over a recording (training) or a spoken
@@ -78,6 +84,32 @@ running mean of earlier answers).
 - Baselines: constant 0.5 (AUC 0.5, Brier 0.25). Also shown for comparison: no per-person centring,
   and the invalid random split by recording.
 
+## Results (`results/face_model_eval.json`)
+
+1,189 recordings, 172 people (581 lies, 608 truths), 5-fold by participant.
+
+| | AUC | Brier |
+|---|---|---|
+| Face model, split by participant | **0.568** [95% CI 0.525, 0.608] | 0.2481 [0.2454, 0.2507] |
+| Same, 5 different fold shuffles | mean 0.556 (0.550–0.568) | |
+| Without per-person centring | 0.545 | 0.2490 |
+| Random split by recording (not valid) | 0.566 | 0.2490 |
+| Chance / constant 0.5 | 0.500 | 0.2500 |
+
+- **It beats chance, modestly.** The whole 95% interval is above 0.5, and shuffling truth/lie within
+  each person 200 times never reached it often (p = 0.005; the shuffles averaged 0.499, 95th
+  percentile 0.536). The headline 0.568 is the best of five fold shuffles; their mean is 0.556.
+- **It knows it is weak.** Strong regularisation was chosen in every fold (C = 0.003), so
+  predictions stay between about 0.44 and 0.54, and they are roughly calibrated: the lowest fifth
+  of predictions (mean 0.44) were lies 38% of the time, the highest fifth (0.54) 56%.
+- **Liars moved less.** Standardised weights: brow movement −0.08, blinking −0.05, head pitch −0.05,
+  head yaw −0.05, looking away +0.04, head position +0.03, horizontal gaze +0.02. Less movement under
+  deception fits the cognitive-load account in the literature. Every effect is small.
+- **Per-person centring matters** (0.568 vs 0.545): what counts is a change from your own normal.
+- **The split by recording did not inflate the score here** (0.566), because per-person centring
+  already removes most of who someone is. So we do not claim it would have; we split by person
+  because that is the question the game asks (a stranger, not someone in the training set).
+
 ## In the game
 
 The trained model gives a log-odds score for each spoken answer, centred on the player's own
@@ -86,8 +118,10 @@ prior before the game has seen any of your lies, and as one feature (`i3d_face`)
 can reweight for you. Response latency is never part of it, because the dataset has no
 question-to-answer timing; latency stays in the online model only.
 
-Without a trained model file the score is 0, the game behaves exactly as before, and the report
-says *demonstration mode*.
+The trained model is installed (`backend/tilt/pretrained_face_model.json`, from the results
+above), and `/api/face-model` reports it. Because its predictions are cautious, it nudges the
+first reads and then gives way to what the game learns about you. Without the file the score is 0,
+the game behaves exactly as before, and the report says *demonstration mode*.
 
 ## Known gaps
 

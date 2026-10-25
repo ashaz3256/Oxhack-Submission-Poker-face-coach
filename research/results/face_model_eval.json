@@ -1,0 +1,153 @@
+{
+  "dataset": {
+    "doi": "10.5281/zenodo.17421590",
+    "licence": "CC BY 4.0",
+    "file": "video_features.csv"
+  },
+  "created": "2026-10-25T09:21:09+00:00",
+  "commit": "1dfcdc0",
+  "features": [
+    "head_yaw_sd",
+    "head_pitch_sd",
+    "head_move_sd",
+    "gaze_x_sd",
+    "gaze_y_sd",
+    "gaze_shift_frac",
+    "blink_frac",
+    "brow_sd"
+  ],
+  "unit": "one recording (a full answer), features summarised over the whole recording",
+  "split": "5-fold by participant, nested 4-fold choice of C",
+  "selection": {
+    "recordings_in_file": 1568,
+    "participants_in_file": 196,
+    "min_clean_frames": 10,
+    "clean_frame_fraction_by_label": {
+      "truth": 0.3912477976729648,
+      "lie": 0.384383853253081
+    },
+    "recordings_with_enough_frames_by_label": {
+      "truth": 626,
+      "lie": 590
+    },
+    "recordings_used": 1189,
+    "participants_used": 172
+  },
+  "counts": {
+    "recordings": 1189,
+    "participants": 172,
+    "lies": 581,
+    "truths": 608,
+    "participants_with_both_labels": 172,
+    "missing_feature_fraction": {
+      "head_yaw_sd": 0.0,
+      "head_pitch_sd": 0.0,
+      "head_move_sd": 0.0,
+      "gaze_x_sd": 0.0,
+      "gaze_y_sd": 0.0,
+      "gaze_shift_frac": 0.0,
+      "blink_frac": 0.0,
+      "brow_sd": 0.0
+    }
+  },
+  "model": {
+    "auc": 0.5676776655494157,
+    "brier": 0.248093101101109,
+    "log_loss": 0.6895425695859078,
+    "chosen_C_per_fold": [
+      0.003,
+      0.003,
+      0.003,
+      0.003,
+      0.003
+    ]
+  },
+  "auc_over_repeats": {
+    "repeats": 5,
+    "mean": 0.5563286982516532,
+    "min": 0.5502253374399855,
+    "max": 0.5676776655494157
+  },
+  "bootstrap_by_participant": {
+    "auc_95ci": [
+      0.5253280413767143,
+      0.6078226027185355
+    ],
+    "brier_95ci": [
+      0.24539285346716536,
+      0.25069110399647415
+    ],
+    "resamples": 2000
+  },
+  "permutation_within_participant": {
+    "permutations": 200,
+    "null_auc_mean": 0.49902307302518345,
+    "null_auc_95th": 0.5361343871727512,
+    "p_value": 0.004975124378109453
+  },
+  "baselines": {
+    "constant_0.5": {
+      "auc": 0.5,
+      "brier": 0.25,
+      "log_loss": 0.6931471805599453
+    },
+    "base_rate": {
+      "auc": 0.5,
+      "brier": 0.249871084888744,
+      "log_loss": 0.6928893281740534
+    }
+  },
+  "comparisons": {
+    "without_per_person_centring": {
+      "auc": 0.5450901349759942,
+      "brier": 0.24900980214059829,
+      "log_loss": 0.6916759969169288
+    },
+    "naive_video_split_NOT_VALID": {
+      "auc": 0.5658149515354651,
+      "brier": 0.24903750876679556,
+      "log_loss": 0.6926327061593583
+    }
+  },
+  "calibration": [
+    {
+      "p_mean": 0.43743891723558387,
+      "lie_rate": 0.37815126050420167,
+      "n": 238
+    },
+    {
+      "p_mean": 0.4746702338678248,
+      "lie_rate": 0.49159663865546216,
+      "n": 238
+    },
+    {
+      "p_mean": 0.48859637443291365,
+      "lie_rate": 0.459915611814346,
+      "n": 237
+    },
+    {
+      "p_mean": 0.504578329686564,
+      "lie_rate": 0.5504201680672269,
+      "n": 238
+    },
+    {
+      "p_mean": 0.5381779921852671,
+      "lie_rate": 0.5630252100840336,
+      "n": 238
+    }
+  ],
+  "final_model": {
+    "C": 0.003,
+    "coefficients_standardised": {
+      "head_yaw_sd": -0.045407995947233375,
+      "head_pitch_sd": -0.05438591400019297,
+      "head_move_sd": 0.025988423452478423,
+      "gaze_x_sd": 0.022776763986408894,
+      "gaze_y_sd": 0.005467234600930956,
+      "gaze_shift_frac": 0.042061792327368154,
+      "blink_frac": -0.053948754254877454,
+      "brow_sd": -0.08255295438377536
+    },
+    "usable_in_game": true
+  }
+}
