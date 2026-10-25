@@ -8,8 +8,11 @@ Flow of a game:
   over   - say "play again"
 
 As the mafia, everything you say in the discussion serves a lie, so each answer of three words
-or more is labelled a lie when you are the mafia and the truth when you are not. The lie model
-reads your face, voice and words before it learns the label, so its accuracy is out-of-sample.
+or more is labelled a lie when you are the mafia and the truth when you are not. Those labels are
+only released to the lie model when the game ends: within a game every answer has the same label,
+so learning them as they come would teach the detector your role rather than your tells (a player
+with no tells at all was read perfectly by the third answer). For the same reason the town only
+trusts the detector on what it got right in earlier games and the warm-up.
 
 The AI town thinks in probabilities (beliefs.py): each villager bot holds P(mafia) for every
 player and updates it with Bayes' rule from the lie detector's reads, silences, accusations, kills
@@ -108,6 +111,7 @@ class MafiaSession:
         self.face = FaceScorer()
         self.face_frames: list[list[float]] | None = None  # this turn's per-frame face primitives, set by the API
         self.utterances: list[Utterance] = []
+        self.pending_labels: list[tuple] = []  # this game's labelled answers, learned when it ends
         self.votes: list[DayVote] = []
         self.games: list[Game] = []
         self.chat: list[dict] = []
@@ -316,8 +320,9 @@ class MafiaSession:
                       p_blind=round(base, 3), cues=[describe(k, f[k]) for k in top], llm=llm)
         self.utterances.append(u)
         if is_lie is not None:
-            self.model.add(raw, transcript, llm, is_lie)
-        scored = [(x.p_lie, int(x.is_lie)) for x in self.utterances[:-1] if x.is_lie is not None and x.p_lie is not None]
+            self.pending_labels.append((raw, transcript, llm, is_lie))
+        scored = [(x.p_lie, int(x.is_lie)) for x in self.utterances
+                  if x.game != game.number and x.is_lie is not None and x.p_lie is not None]
         reliability = TownMind.detector_reliability(scored)
         delta = game.mind.observe_read(p, base, reliability)
         self.last_read_reliability = reliability
@@ -447,6 +452,9 @@ class MafiaSession:
         else:
             return False
         game.phase = "over"
+        for raw, transcript, llm, is_lie in self.pending_labels:
+            self.model.add(raw, transcript, llm, is_lie)
+        self.pending_labels = []
         you_won = (game.winner == "mafia") == game.you_mafia
         reveal = "" if game.you_mafia else f" The mafia was {game.mafia}."
         self._say(NARRATOR, f"The {game.winner} wins.{reveal} {'You win!' if you_won else 'You lose.'} "

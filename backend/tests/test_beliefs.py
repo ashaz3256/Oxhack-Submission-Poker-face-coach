@@ -93,3 +93,20 @@ def test_game_runs_end_to_end_with_beliefs():
     s = play(n_games=3, leakiness=1.0, seed=5)
     assert s.votes and all(v.p_you_reader is not None for v in s.votes)
     assert s.belief_log and all(math.isclose(sum(p.values()), 1.0) for row in s.belief_log for p in row["beliefs"].values())
+
+
+def test_detector_cannot_learn_your_role_within_a_game():
+    """Every answer in a game shares one label (your role). If labels were learned as they came, a
+    player with no tells at all would be read perfectly by the third answer. They wait for game end."""
+    from sklearn.metrics import roc_auc_score
+
+    from tilt.synthetic import play
+
+    later = []
+    for i in range(40):
+        s = play(n_games=1, leakiness=0.0, seed=2000 + i, same_words=True)
+        answers = [u for u in s.utterances if u.kind == "answer" and u.is_lie is not None]
+        later += [(u.p_lie, int(u.is_lie)) for u in answers[2:]]
+    labels = [y for _, y in later]
+    assert 0 < sum(labels) < len(labels)
+    assert roc_auc_score(labels, [p for p, _ in later]) < 0.7
